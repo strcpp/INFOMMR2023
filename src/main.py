@@ -31,7 +31,8 @@ class App(glw.WindowConfig):
         super().__init__(*args, **kwargs)  # type: ignore
         self.camera = glw.scene.camera.OrbitCamera(aspect_ratio=self.wnd.aspect_ratio)
         # self.camera.mouse_sensitivity = 0.75
-        self.camera.zoom_state(-2.5)
+        self.camera.zoom_state(5)
+
 
         self.mouse_pressed = False
         self.mouse_button = 0
