@@ -27,7 +27,9 @@ class Shaders:
             raise RuntimeError("Shaders is a singleton and should not be instantiated more than once")
         self.shaders = {}
         self.app = app
-        self.shaders['base'] = self.app.load_program("shaders/base.glsl")
+        self.shaders['base-smooth'] = self.app.load_program("shaders/base-smooth.glsl")
+        self.shaders['base-flat'] = self.app.load_program("shaders/base-flat.glsl")
+        
         self.shaders['skybox'] = self.app.load_program("shaders/skybox.glsl")
         self.shaders['grid'] = self.app.load_program("shaders/grid.glsl")
 

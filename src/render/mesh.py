@@ -35,9 +35,6 @@ class Mesh:
         start = time.time()
         models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
 
-        programs = Shaders.instance()
-        prog = programs.get('base')
-
         for root, dirs, files in (pbar := tqdm(os.walk(models_path), bar_format="{desc}")):
             name = os.path.basename(root)
 
@@ -46,7 +43,7 @@ class Mesh:
                 filename = files[0]
                 print("HERERHAFASF", filename)
                 obj = self.app.load_scene(os.path.join(root, filename))
-                self.data[filename] = (obj.root_nodes[0].mesh.vao.instance(prog), None, prog)                
+                self.data[filename] = (obj.root_nodes[0].mesh.vao, None)                
                 break
 
             # for filename in files:

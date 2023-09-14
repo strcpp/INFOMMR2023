@@ -38,6 +38,7 @@ uniform sampler2D Texture;
 uniform Light light;
 uniform vec3 camPos;
 // uniform bool useTexture;
+uniform vec3 ucolor;
 
 // simple phong model
 vec3 calculateLighting() {
@@ -65,11 +66,12 @@ vec3 calculateLighting() {
 void main() {
     float gamma = 2.2;
 
-    vec3 color = vec3(1.0, 0.0, 0.0);    
+    // vec3 color = vec3(1.0, 0.0, 0.0);    
     // if(useTexture) {
     //     color = texture(Texture, tex_coords).rgb; // Note: `tex_coords` is commented out in your original shader
     // }
 
+    vec3 color = ucolor;
     color = pow(color, vec3(gamma));
     color = color * calculateLighting();
     color = pow(color, 1 / vec3(gamma));

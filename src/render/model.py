@@ -3,6 +3,7 @@ import numpy as np
 from typing import Optional
 from light import Light
 from pyrr import Quaternion, Vector3, Matrix44
+from render.shaders import Shaders
 
 class Model:
     """
@@ -20,6 +21,10 @@ class Model:
         self.app = app
         self.command = meshes.data[mesh_name]
 
+
+        programs = Shaders.instance()
+        self.prog = programs.get('base-flat')
+
         self.translation = Vector3()
         self.rotation = Quaternion()
         self.scale = Vector3([1.0, 1.0, 1.0])
@@ -27,10 +32,23 @@ class Model:
         self.show_model = True
 
         self.model_transformation = Matrix44.identity()
+        self.color = [0,0,0]
 
+
+    def set_shading(self, shading):
+        programs = Shaders.instance()
+        print(shading)
+        if(shading == "flat"):
+            self.prog = programs.get('base-flat')
+        elif(shading == "smooth"):
+            self.prog = programs.get('base-smooth')
+            
 
     def update(self, dt: float, interpolation_method: str) -> None:
         pass
+
+    def set_color(self, color):
+        self.color = color
 
     def move(self, dx: float, dz: float) -> None:
         """
@@ -78,8 +96,9 @@ class Model:
         :param light: Scene light.
         """
         command = self.command
-        prog, texture, vao = command[2], command[1], command[0]
+        texture, vao = command[1], command[0].instance(self.prog)
 
+        prog = self.prog
         prog['light.Ia'].write(light.Ia)
         prog['light.Id'].write(light.Id)
         prog['light.Is'].write(light.Is)
@@ -89,6 +108,8 @@ class Model:
         prog['model'].write(self.get_model_matrix(None))
         prog['view'].write(view_matrix)
         prog['projection'].write(proj_matrix)
+        prog['ucolor'].write(np.array(self.color, dtype='f4'))
+
         # prog['useTexture'].value = texture is not None
 
         if texture is not None:
