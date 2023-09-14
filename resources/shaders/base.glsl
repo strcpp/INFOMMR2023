@@ -4,25 +4,20 @@
 
 in vec3  in_position;
 in vec3  in_normal;
-in vec2  in_texcoord_0;
 
-out vec2 tex_coords;
-out vec3 normal;
-out vec3 fragPos;
+flat out vec3 normal;
+flat out vec3 fragPos;
 
 uniform mat4 model;
 uniform mat4 projection;
 uniform mat4 view;
 
-
 void main() {
-
 
     normal = mat3(transpose(inverse(model))) * normalize(in_normal);
     fragPos = vec3(model * vec4(in_position, 1)); 
 
     gl_Position = projection * view * model * vec4(in_position, 1);
-    tex_coords = in_texcoord_0;
 }
 
 #elif defined FRAGMENT_SHADER
@@ -36,15 +31,13 @@ struct Light {
     vec3 Is;
 };
 
-
-in vec2 tex_coords;
-in vec3 normal;
-in vec3 fragPos;
+flat in vec3 normal;
+flat in vec3 fragPos;
 
 uniform sampler2D Texture;
 uniform Light light;
 uniform vec3 camPos;
-uniform bool useTexture;
+// uniform bool useTexture;
 
 // simple phong model
 vec3 calculateLighting() {
@@ -68,17 +61,18 @@ vec3 calculateLighting() {
     
     return (ambient + diffuse + specular) * attenuation;
 }
+
 void main() {
     float gamma = 2.2;
 
     vec3 color = vec3(1.0, 0.0, 0.0);    
-    if(useTexture) {
-        color = texture(Texture, tex_coords).rgb;
-    }
+    // if(useTexture) {
+    //     color = texture(Texture, tex_coords).rgb; // Note: `tex_coords` is commented out in your original shader
+    // }
 
     color = pow(color, vec3(gamma));
     color = color * calculateLighting();
-    color = pow(color, 1 /  vec3(gamma));
+    color = pow(color, 1 / vec3(gamma));
 
     f_color = vec4(color, 1.0);
 }

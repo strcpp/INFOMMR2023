@@ -18,7 +18,7 @@ class Model:
 
         meshes = Mesh.instance()
         self.app = app
-        self.commands = meshes.data[mesh_name][0]
+        self.command = meshes.data[mesh_name]
 
         self.translation = Vector3()
         self.rotation = Quaternion()
@@ -65,8 +65,8 @@ class Model:
         :return: Model matrix.
         """
         model = self.model_transformation
-        if transformation_matrix is not None:
-            model = self.model_transformation * transformation_matrix
+        # if transformation_matrix is not None:
+        #     model = self.model_transformation * transformation_matrix
 
         return np.array(model, dtype='f4')
 
@@ -77,21 +77,21 @@ class Model:
         :param view_matrix: View matrix.
         :param light: Scene light.
         """
-        for i, command in enumerate(self.commands):
-            transformation_matrix, prog, texture, vao = command[3], command[2], command[1], command[0]
+        command = self.command
+        prog, texture, vao = command[2], command[1], command[0]
 
-            prog['light.Ia'].write(light.Ia)
-            prog['light.Id'].write(light.Id)
-            prog['light.Is'].write(light.Is)
-            prog['light.position'].write(light.position)
-            prog['camPos'].write(np.array(self.app.camera.position, dtype='f4'))
+        prog['light.Ia'].write(light.Ia)
+        prog['light.Id'].write(light.Id)
+        prog['light.Is'].write(light.Is)
+        prog['light.position'].write(light.position)
+        prog['camPos'].write(np.array(self.app.camera.position, dtype='f4'))
 
-            prog['model'].write(self.get_model_matrix(transformation_matrix))
-            prog['view'].write(view_matrix)
-            prog['projection'].write(proj_matrix)
-            prog['useTexture'].value = texture is not None
+        prog['model'].write(self.get_model_matrix(None))
+        prog['view'].write(view_matrix)
+        prog['projection'].write(proj_matrix)
+        # prog['useTexture'].value = texture is not None
 
-            if texture is not None:
-                texture.use()
+        if texture is not None:
+            texture.use()
 
-            vao.render()
+        vao.render()

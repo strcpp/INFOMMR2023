@@ -21,6 +21,11 @@ class BasicScene(Scene):
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
+        self.model = Model(self.app, "m1337.obj")
+        self.light = Light(
+            position=Vector3([5., 5., 5.], dtype='f4'),
+            color=Vector3([1.0, 1.0, 1.0], dtype='f4')
+        )
         pass
 
     def unload(self) -> None:
@@ -50,6 +55,12 @@ class BasicScene(Scene):
 
     def render(self) -> None:
         self.skybox.draw(self.app.camera.projection.matrix, self.app.camera.matrix)
+        self.model.draw(
+                self.app.camera.projection.matrix,
+                self.app.camera.matrix,
+                self.light
+            )
+
         self.render_ui()
         """
         Renders all objects in the scene.
