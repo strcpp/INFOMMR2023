@@ -1,0 +1,7 @@
+moderngl
+moderngl-window
+numpy
+imgui
+pyrr
+numba
+imageio
