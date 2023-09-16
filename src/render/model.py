@@ -5,6 +5,7 @@ from light import Light
 from pyrr import Quaternion, Vector3, Matrix44
 from render.shaders import Shaders
 
+
 class Model:
     """
     Represents a 3D model.
@@ -16,11 +17,11 @@ class Model:
         :param app: Glw app.
         :param mesh_name: Name of the model's mesh.
         """
-
-        meshes = Mesh.instance()
+        meshes = Mesh.instance(mesh_name)
+        meshes.set_mesh_name(mesh_name)
+        meshes.set_data()
         self.app = app
         self.command = meshes.data[mesh_name]
-
 
         programs = Shaders.instance()
         self.prog = programs.get('base-flat')
@@ -32,17 +33,14 @@ class Model:
         self.show_model = True
 
         self.model_transformation = Matrix44.identity()
-        self.color = [0,0,0]
-
+        self.color = [0, 0, 0]
 
     def set_shading(self, shading):
         programs = Shaders.instance()
-        print(shading)
-        if(shading == "flat"):
+        if shading == "flat":
             self.prog = programs.get('base-flat')
-        elif(shading == "smooth"):
+        elif shading == "smooth":
             self.prog = programs.get('base-smooth')
-            
 
     def update(self, dt: float, interpolation_method: str) -> None:
         pass

@@ -15,7 +15,7 @@ class App(glw.WindowConfig):
     """
     Main glw App.
     """
-    title = "Multimedia retreival"
+    title = "Multimedia retrieval"
     gl_version = (3, 3)
     window_size = (1600, 800)
     aspect_ratio = None
@@ -32,7 +32,6 @@ class App(glw.WindowConfig):
         self.camera = glw.scene.camera.OrbitCamera(aspect_ratio=self.wnd.aspect_ratio)
         # self.camera.mouse_sensitivity = 0.75
         self.camera.zoom_state(5)
-
 
         self.mouse_pressed = False
         self.mouse_button = 0
