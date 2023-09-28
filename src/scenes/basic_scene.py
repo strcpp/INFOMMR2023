@@ -44,7 +44,7 @@ class BasicScene(Scene):
                     self.models[model_class].append(file)
 
         # Get average model and 5 outliers
-        self.average_model, outliers = return_neighbors()
+        self.average_model, outliers = return_neighbors(2)
 
         self.current_model_name = self.average_model["Shape Name"]
         self.current_model = Model(self.app, self.current_model_name)

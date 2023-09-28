@@ -31,9 +31,10 @@ def show_histogram(df, column_name, class_name):
     plt.show()
 
 
-def return_neighbors():
+def return_neighbors(number_of_outliers: int):
     """
     Returns the nearest neighbor to the average shape as well as the 5 farthest neighbors (outliers).
+    :param number_of_outliers: Determines how many outliers will be returned
     """
     csv_file_path = "tools/outputs/shape_data.csv"
     df = pd.read_csv(csv_file_path, delimiter=';')
@@ -55,7 +56,7 @@ def return_neighbors():
 
     # Find nearest neighbor and 5 farthest neighbors
     nearest_neighbor_index = all_neighbors_indices[0]
-    farthest_neighbors_indices = all_neighbors_indices[-5:]
+    farthest_neighbors_indices = all_neighbors_indices[-number_of_outliers:]
 
     return df.iloc[nearest_neighbor_index], df.iloc[farthest_neighbors_indices]
 
