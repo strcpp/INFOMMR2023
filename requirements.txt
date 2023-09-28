@@ -6,3 +6,6 @@ pyrr
 numba
 imageio
 tqdm
+pandas
+matplotlib
+scikit-learn
