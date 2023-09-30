@@ -57,6 +57,15 @@ class Model:
         self.translation += Vector3([dx, 0, dz])
         self.calculate_model_matrix()
 
+    def translate(self, dx: float, dz: float) -> None:
+        """
+        Translates the model on the x and z axes once.
+        :param dx: Amount of translation on the x-axis.
+        :param dz: Amount of translation on the z-axis.
+        """
+        self.translation = Vector3([dx, 0, dz])
+        self.calculate_model_matrix()
+
     def rotate_y(self, d: float) -> None:
         """
         Rotates the model.
