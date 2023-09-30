@@ -5,7 +5,7 @@ from pyrr import Vector3
 from light import Light
 import imgui
 import os
-from tools.display_statistics import return_neighbors
+from tools.display_statistics import return_neighbors, return_bounding_box
 from tqdm import tqdm
 from moderngl_window.opengl.vao import VAOError
 
@@ -117,7 +117,6 @@ class BasicScene(Scene):
 
     def render(self) -> None:
         self.skybox.draw(self.app.camera.projection.matrix, self.app.camera.matrix)
-
         if self.show_wireframe:
             self.app.ctx.wireframe = True
 
@@ -140,6 +139,9 @@ class BasicScene(Scene):
                     pass
 
             self.app.ctx.wireframe = False
+
+        bounding_box = return_bounding_box(self.current_model_name)
+        # Not sure how to draw it
 
         self.current_model.color = [1, 1, 1]
 

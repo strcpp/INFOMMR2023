@@ -9,3 +9,4 @@ tqdm
 pandas
 matplotlib
 scikit-learn
+trimesh

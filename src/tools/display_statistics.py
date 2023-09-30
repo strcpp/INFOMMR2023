@@ -85,3 +85,11 @@ def display_histograms():
 
         show_histogram(class_df, "Number of Faces", shape_class)
         time.sleep(2)
+
+
+def return_bounding_box(model_name):
+    csv_file_path = "tools/outputs/shape_data.csv"
+    df = pd.read_csv(csv_file_path, delimiter=';')
+    shape = df[df['Shape Name'] == model_name]
+    bounding_box = shape.iloc[0]['3D Bounding Box']
+    return bounding_box
