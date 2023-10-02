@@ -8,7 +8,45 @@ import os
 from tools.display_statistics import return_neighbors, return_bounding_box
 from tqdm import tqdm
 from moderngl_window.opengl.vao import VAOError
+from render.lines import Lines
 
+def get_bb_lines(bounding_box):
+    x0, y0, z0 = bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]
+    x1, y1, z1 = bounding_box[1][0], bounding_box[1][1], bounding_box[1][2]
+
+    p000 = (x0, y0, z0)
+    p001 = (x0, y0, z1)
+    p010 = (x0, y1, z0)
+    p011 = (x0, y1, z1)
+    p100 = (x1, y0, z0)
+    p101 = (x1, y0, z1)
+    p110 = (x1, y1, z0)
+    p111 = (x1, y1, z1)
+
+    connections = [
+        (p000, p001), (p000, p010), (p000, p100),
+        (p111, p110), (p111, p101), (p111, p011),
+        (p001, p101), (p001, p011),
+        (p010, p110), (p010, p011),
+        (p100, p101), (p100, p110),
+    ]
+
+    return connections
+
+def get_basis_lines():
+    origin = (0, 0, 0)
+    
+    i = (0.25, 0, 0)
+    j = (0, 0.25, 0)
+    k = (0, 0, 0.25)
+
+    connections = [
+        (origin, i),  # Line along the x-axis
+        (origin, j),  # Line along the y-axis
+        (origin, k)   # Line along the z-axis
+    ]
+    
+    return connections
 
 class BasicScene(Scene):
     """
@@ -30,6 +68,8 @@ class BasicScene(Scene):
     models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
     average_model = None
     outliers = []
+    lines = None
+    model_bb = []
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -51,9 +91,10 @@ class BasicScene(Scene):
         self.current_class = self.average_model["Shape Class"]
         self.current_class_id = list(self.models.keys()).index(self.current_class)
         self.current_model_id = self.models[self.current_class].index(self.current_model_name)
+        self.lines = Lines(self.app, line_width=1)
 
         for outlier in outliers["Shape Name"]:
-            self.outliers.append(Model(self.app, outlier))
+            self.outliers.append((Model(self.app, outlier), get_bb_lines(return_bounding_box(outlier))))
 
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
@@ -61,6 +102,11 @@ class BasicScene(Scene):
         )
 
         self.current_shading_mode = 0
+
+        bounding_box = return_bounding_box(self.current_model_name)
+        self.model_bb = get_bb_lines(bounding_box)
+        self.model_basis = get_basis_lines()
+
 
     def unload(self) -> None:
         pass
@@ -129,6 +175,7 @@ class BasicScene(Scene):
 
             translation = 1
             for outlier in self.outliers:
+                outlier, bounds, = outlier[0],outlier[1]
                 outlier.color = [1, 1, 1]
                 try:
                     outlier.draw(
@@ -145,7 +192,6 @@ class BasicScene(Scene):
 
             self.app.ctx.wireframe = False
 
-        bounding_box = return_bounding_box(self.current_model_name)
         # Not sure how to draw it
 
         self.current_model.color = [1, 1, 1]
@@ -156,8 +202,16 @@ class BasicScene(Scene):
             self.light
         )
 
+        self.lines.update(self.model_bb)
+        self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, self.current_model.get_model_matrix())
+        self.lines.color = [0,0,1,1]
+        self.lines.update(self.model_basis)
+        self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, self.current_model.get_model_matrix())
+        self.lines.color = [1,0,0,1]
+        
         translation = 1
         for outlier in self.outliers:
+            outlier, bounds, = outlier[0],outlier[1]
             outlier.color = [1, 1, 1]
             try:
                 outlier.draw(
@@ -169,6 +223,14 @@ class BasicScene(Scene):
                 translation *= -1
                 if translation > 0:
                     translation += 1
+                    
+                self.lines.update(bounds)
+                self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, outlier.get_model_matrix())
+                self.lines.color = [0,0,1,1]
+                self.lines.update(self.model_basis)
+                self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, outlier.get_model_matrix())
+                self.lines.color = [1,0,0,1]
+
             except VAOError:
                 pass
 

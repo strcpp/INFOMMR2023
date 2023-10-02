@@ -2,7 +2,9 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import time
 from sklearn.neighbors import NearestNeighbors
+import os
 
+csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
 
 def show_histogram(df, column_name, class_name):
     """
@@ -36,8 +38,7 @@ def return_neighbors(number_of_outliers: int):
     Returns the nearest neighbor to the average shape as well as the 5 farthest neighbors (outliers).
     :param number_of_outliers: Determines how many outliers will be returned
     """
-    csv_file_path = "tools/outputs/shape_data.csv"
-    df = pd.read_csv(csv_file_path, delimiter=';')
+    df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
 
     average_vertices = df['Number of Vertices'].mean()
     average_faces = df['Number of Faces'].mean()
@@ -65,8 +66,7 @@ def display_histograms():
     """
     Displays multiple histograms
     """
-    csv_file_path = "tools/outputs/shape_data.csv"
-    df = pd.read_csv(csv_file_path, delimiter=';')
+    df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
 
     # Display histogram for the number of vertices
     show_histogram(df, "Number of Vertices", None)
@@ -88,8 +88,12 @@ def display_histograms():
 
 
 def return_bounding_box(model_name):
-    csv_file_path = "tools/outputs/shape_data.csv"
-    df = pd.read_csv(csv_file_path, delimiter=';')
+    df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
     shape = df[df['Shape Name'] == model_name]
     bounding_box = shape.iloc[0]['3D Bounding Box']
+    # Remove unwanted characters like [ and ], then split by newline
+    lines = bounding_box.replace('[', '').replace(']', '').strip().split('\r\n')
+    
+    # For each line, split by whitespace and convert to float
+    bounding_box = [list(map(float, line.split())) for line in lines]
     return bounding_box

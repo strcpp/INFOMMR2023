@@ -30,8 +30,10 @@ class App(glw.WindowConfig):
         """
         super().__init__(*args, **kwargs)  # type: ignore
         self.camera = glw.scene.camera.OrbitCamera(aspect_ratio=self.wnd.aspect_ratio)
+        self.camera.zoom_sensitivity = 0.05
         # self.camera.mouse_sensitivity = 0.75
-        self.camera.zoom_state(5)
+        # self.camera.zoom_state(5)
+        # self.camera.set_position(0.04484549, 0.79429578, 1.83496133)
 
         self.mouse_pressed = False
         self.mouse_button = 0
@@ -58,6 +60,7 @@ class App(glw.WindowConfig):
         :param time: Elapsed time.
         :param frame_time: Time passed after the previous frame.
         """
+
         self.ctx.enable(int(str(gl.DEPTH_TEST)))
 
         self.ctx.clear(color=(0.09, 0.12, 0.23, 0))
@@ -71,6 +74,9 @@ class App(glw.WindowConfig):
             self.writer.text = "0"
 
         self.writer.draw(self.fps_dims, size=20)
+        # print(self.camera.position)
+        # print(self.camera.pitch, " ", self.camera.yaw)
+
 
     def key_event(self, key: int, action: str, modifiers: glw.context.base.keys.KeyModifiers) -> None:
         """
