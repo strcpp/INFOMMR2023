@@ -96,4 +96,10 @@ def return_bounding_box(model_name):
     
     # For each line, split by whitespace and convert to float
     bounding_box = [list(map(float, line.split())) for line in lines]
+
+    # In case bounding box length is 1, for some reason
+    if len(bounding_box) == 1:
+        bounding_box = bounding_box[0]
+        return [[bounding_box[0], bounding_box[1], bounding_box[2]], [bounding_box[3], bounding_box[4], bounding_box[5]]]
+
     return bounding_box

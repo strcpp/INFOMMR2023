@@ -9,6 +9,7 @@ from tools.display_statistics import return_neighbors, return_bounding_box
 from tqdm import tqdm
 from moderngl_window.opengl.vao import VAOError
 from render.lines import Lines
+import moderngl
 
 def get_bb_lines(bounding_box):
     x0, y0, z0 = bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]
@@ -33,17 +34,28 @@ def get_bb_lines(bounding_box):
 
     return connections
 
-def get_basis_lines():
-    origin = (0, 0, 0)
-    
-    i = (0.25, 0, 0)
-    j = (0, 0.25, 0)
-    k = (0, 0, 0.25)
+def get_basis_lines(bounding_box):
 
+    # Calculate the model's geometric center
+    center_x = (bounding_box[0][0] + bounding_box[1][0]) / 2
+    center_y = (bounding_box[0][1] + bounding_box[1][1]) / 2
+    center_z = (bounding_box[0][2] + bounding_box[1][2]) / 2
+    
+    center = (center_x, center_y, center_z)
+    
+    # Define the offsets for the basis vectors
+    offset = 0.25  # This can be adjusted based on desired length of basis vectors
+    
+    # Calculate endpoints of basis vectors centered at the model's origin
+    i_pos = (center_x + offset, center_y, center_z)
+    j_pos = (center_x, center_y + offset, center_z)    
+    k_pos = (center_x, center_y, center_z + offset)
+    
+    # Define the lines connecting the center to the endpoints of the basis vectors
     connections = [
-        (origin, i),  # Line along the x-axis
-        (origin, j),  # Line along the y-axis
-        (origin, k)   # Line along the z-axis
+        (center, i_pos),
+        (center, j_pos),
+        (center, k_pos),
     ]
     
     return connections
@@ -94,7 +106,8 @@ class BasicScene(Scene):
         self.lines = Lines(self.app, line_width=1)
 
         for outlier in outliers["Shape Name"]:
-            self.outliers.append((Model(self.app, outlier), get_bb_lines(return_bounding_box(outlier))))
+            bounding_box = return_bounding_box(outlier)
+            self.outliers.append((Model(self.app, outlier), get_bb_lines(bounding_box), get_basis_lines(bounding_box)))
 
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
@@ -105,7 +118,7 @@ class BasicScene(Scene):
 
         bounding_box = return_bounding_box(self.current_model_name)
         self.model_bb = get_bb_lines(bounding_box)
-        self.model_basis = get_basis_lines()
+        self.model_basis = get_basis_lines(bounding_box)
 
 
     def unload(self) -> None:
@@ -162,6 +175,9 @@ class BasicScene(Scene):
         self.app.imgui.render(imgui.get_draw_data())
 
     def render(self) -> None:
+        """
+        Renders all objects in the scene.
+        """
         self.skybox.draw(self.app.camera.projection.matrix, self.app.camera.matrix)
         if self.show_wireframe:
             self.app.ctx.wireframe = True
@@ -206,12 +222,14 @@ class BasicScene(Scene):
         self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, self.current_model.get_model_matrix())
         self.lines.color = [0,0,1,1]
         self.lines.update(self.model_basis)
+        self.app.ctx.depth_func = '1' # ALWAYS 
         self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, self.current_model.get_model_matrix())
+        self.app.ctx.depth_func = '<' # LESS
         self.lines.color = [1,0,0,1]
         
         translation = 1
         for outlier in self.outliers:
-            outlier, bounds, = outlier[0],outlier[1]
+            outlier, bounds, basis = outlier[0],outlier[1], outlier[2]
             outlier.color = [1, 1, 1]
             try:
                 outlier.draw(
@@ -227,14 +245,14 @@ class BasicScene(Scene):
                 self.lines.update(bounds)
                 self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, outlier.get_model_matrix())
                 self.lines.color = [0,0,1,1]
-                self.lines.update(self.model_basis)
+                self.app.ctx.depth_func = '1' # ALWAYS 
+                self.lines.update(basis)
                 self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, outlier.get_model_matrix())
+                self.app.ctx.depth_func = '<' # LESS
                 self.lines.color = [1,0,0,1]
 
             except VAOError:
                 pass
 
         self.render_ui()
-        """
-        Renders all objects in the scene.
-        """
+
