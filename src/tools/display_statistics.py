@@ -7,15 +7,16 @@ import os
 csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
 
 
-def show_histogram(df, column_name, class_name):
+def histogram(df, column_name, class_name, show):
     """
     Shows the histogram for a specific column
     :param df: Dataframe
     :param column_name: Column name from which the histogram is calculated
     :param class_name: Name of the class in case we want class-specific histograms
+    :param show: Controls whether the histogram will be shown or not
     """
     plt.figure(figsize=(10, 6))
-    n, bins, patches = plt.hist(df[column_name], bins=20, edgecolor='k', alpha=0.7, label=column_name)
+    n, bins, patches = plt.hist(df[column_name], bins=35, edgecolor='k', alpha=0.7, label=column_name)
     plt.axvline(df[column_name].mean(), color='r', linestyle='dashed', linewidth=2,
                 label=f'Average {column_name}: {df[column_name].mean():.2f}')
     if class_name:
@@ -23,6 +24,7 @@ def show_histogram(df, column_name, class_name):
     else:
         plt.title(f'Histogram of {column_name}')
     plt.xlabel(column_name)
+    plt.xticks(bins, fontsize=5)
     plt.ylabel('Number of Shapes')
     plt.legend()
 
@@ -31,7 +33,19 @@ def show_histogram(df, column_name, class_name):
         bin_center = (bins[i] + bins[i + 1]) / 2
         plt.text(bin_center, n[i], f'{int(n[i])}', ha='center', va='bottom')
 
-    plt.show()
+    if "Vertices" in column_name:
+        if class_name:
+            plt.savefig(f"outputs/histograms/vertices_{class_name}")
+        else:
+            plt.savefig(f"outputs/histograms/vertices_all")
+    else:
+        if class_name:
+            plt.savefig(f"outputs/histograms/faces_{class_name}")
+        else:
+            plt.savefig(f"outputs/histograms/faces_all")
+
+    if show:
+        plt.show()
 
 
 def return_neighbors(number_of_outliers: int):
@@ -67,33 +81,36 @@ def return_neighbors(number_of_outliers: int):
     return df.iloc[nearest_neighbor_index], df.iloc[farthest_neighbors_indices]
 
 
-def display_histograms():
+def save_histograms(show_histogram):
     """
     Displays multiple histograms
     """
     try:
         df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
     except FileNotFoundError:
-        new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
+        new_path = os.path.join('outputs', 'shape_data.csv')
         df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
     # Display histogram for the number of vertices
-    show_histogram(df, "Number of Vertices", None)
+    histogram(df, "Number of Vertices", None, show_histogram)
 
     # Display histogram for the number of faces
-    show_histogram(df, "Number of Faces", None)
+    histogram(df, "Number of Faces", None, show_histogram)
 
     unique_shape_classes = df['Shape Class'].unique()
 
     # Create histograms for each shape class
     for i, shape_class in enumerate(unique_shape_classes):
         class_df = df[df['Shape Class'] == shape_class]
-        show_histogram(class_df, "Number of Vertices", shape_class)
+        histogram(class_df, "Number of Vertices", shape_class, show_histogram)
 
-        time.sleep(2)
+        if show_histogram:
+            time.sleep(2)
 
-        show_histogram(class_df, "Number of Faces", shape_class)
-        time.sleep(2)
+        histogram(class_df, "Number of Faces", shape_class, show_histogram)
+
+        if show_histogram:
+            time.sleep(2)
 
 
 def return_bounding_box(model_name):
