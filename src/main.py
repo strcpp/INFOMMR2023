@@ -40,8 +40,12 @@ class App(glw.WindowConfig):
         self.mpos = (0, 0)
         self.mdelta = (0, 0)
 
-        with open('config.json', 'r') as file:
-            self.config = json.load(file)
+        try:
+            with open('config.json', 'r') as file:
+                self.config = json.load(file)
+        except FileNotFoundError:
+            with open('../config.json', 'r') as file:
+                self.config = json.load(file)
 
         # initialize all assets
         Shaders.instance(self)

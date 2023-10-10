@@ -63,17 +63,19 @@ def get_basis_lines(bounding_box):
     
     return connections
 
-def refine_mesh(mesh, target_faces = 1000):
-    if len(mesh.faces) == target_faces:
+def refine_mesh(mesh, target_faces_min = 1000, target_faces_max = 50000):
+    if len(mesh.faces) == target_faces_min:
         return mesh
 
     #Subdivide until target reached
-    while len(mesh.faces) < target_faces:
+    while len(mesh.faces) < target_faces_min:
         mesh = mesh.subdivide()
 
     #It will probably exceed the target, so decimate it back down
-    while len(mesh.faces) > target_faces:
-        mesh = mesh.simplify_quadratic_decimation(target_faces)
+    if len(mesh.faces) > target_faces_max:
+        mesh = mesh.simplify_quadratic_decimation(target_faces_max)
+    else:
+        mesh = mesh.simplify_quadratic_decimation(target_faces_min)
 
     return mesh
 
@@ -125,10 +127,16 @@ class BasicScene(Scene):
         self.average_model, all_neighbhors = return_neighbors(num_outliers)
         outliers = all_neighbhors[-num_outliers:]
         
-        condition = (all_neighbhors['Number of Faces'] < 100) | \
-            ((all_neighbhors['Number of Vertices'] < 100) & (all_neighbhors['Number of Faces'] > 0) & (all_neighbhors['Number of Vertices'] > 0))
+        condition = (((all_neighbhors['Number of Faces'] < 100) | (all_neighbhors['Number of Vertices'] < 100) |
+                     (all_neighbhors['Number of Faces'] > 50000) | (all_neighbhors['Number of Vertices'] > 50000)))
 
         poorly_sampled = all_neighbhors[condition]
+
+        for i, p in poorly_sampled.iterrows():
+            print(p["Shape Name"])
+            print(p["Number of Faces"])
+            print(p["Number of Vertices"])
+            print("--------------------")
         self.show_poorly_sampled = True
         self.show_wireframe = True
         self.current_model_name = self.average_model["Shape Name"]
@@ -149,10 +157,12 @@ class BasicScene(Scene):
             path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', outlier['Shape Class'], name)
             mesh = trimesh.load_mesh(path)
 
-            print(f"Initial face count: {len(mesh.faces)}")
-            refined_mesh = refine_mesh(mesh, target_faces=1000)
+            print(name)
+            print(f"Initial face count: {len(mesh.faces)} | Initial vertex count: {len(mesh.vertices)}")
+            refined_mesh = refine_mesh(mesh)
             self.refined_meshes[name] = (name, outlier['Shape Class'], refined_mesh)
-            print(f"Refined face count: {len(refined_mesh.faces)}")
+            print(f"Refined face count: {len(refined_mesh.faces)} | Refined vertex count: {len(refined_mesh.vertices)}")
+            print("------------------------")
 
             self.poorly_sampled.append((Model(self.app, name, refined_mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box), name))
 
@@ -278,7 +288,6 @@ class BasicScene(Scene):
                 )
 
             self.app.ctx.wireframe = False
-
 
         if not self.show_poorly_sampled:
             self.current_model.color = [1, 1, 1]

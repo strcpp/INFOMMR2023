@@ -61,8 +61,12 @@ def save():
     shape_data = []
 
     # How many files to load from each class, usually to speed up devel
-    with open('config.json', 'r') as file:
-            config = json.load(file)
+    try:
+        with open('config.json', 'r') as file:
+                config = json.load(file)
+    except FileNotFoundError:
+        with open('../../config.json', 'r') as file:
+                config = json.load(file)
 
     # Iterate through all .obj files
     for root, dirs, files in tqdm(os.walk(models_path), desc="Parsing .obj files"):
@@ -71,45 +75,31 @@ def save():
 
             for i in range(len_files):
                 file = files[i]
-                current_model_vertices = 0
-                current_model_faces = 0
                 current_class = os.path.basename(os.path.normpath(root))
                 file_path = os.path.join(root, file)
 
                 # Get axis-aligned 3D bounding box
                 mesh = trimesh.load_mesh(file_path)
                 bounding_box = mesh.bounds
+                number_of_vertices = len(mesh.vertices)
+                number_of_faces = len(mesh.faces)
 
-                with open(file_path, 'r') as f:
-                    content = f.read()
-                    if '# Vertices:' in content:  # File is a m###.obj file
-                        f.seek(72)  # Hardcoding this in order to speed-up file read
-                        for line in f:
-                            if line.startswith('# Vertices:'):
-                                current_model_vertices = int(line.split(':')[1].strip())
-                            elif line.startswith('# Faces:'):
-                                current_model_faces = int(line.split(':')[1].strip())
-                                break
-                    else:  # File is a D00##.obj file
-                        current_model_vertices = content.count("v")
-                        current_model_faces = content.count("f")
-                    # Save shape data
-                    if len(shape_data) == 0:
-                        shape_data = [
-                            {'Shape Name': file,
-                                'Shape Class': current_class,
-                                'Number of Vertices': current_model_vertices,
-                                'Number of Faces': current_model_faces,
-                                'Type of Faces': 'Triangle',
-                                '3D Bounding Box': bounding_box}
-                        ]
-                    else:
-                        shape_data.append({'Shape Name': file,
-                                            'Shape Class': current_class,
-                                            'Number of Vertices': current_model_vertices,
-                                            'Number of Faces': current_model_faces,
-                                            'Type of Faces': 'Triangle',
-                                            '3D Bounding Box': bounding_box})
+                if len(shape_data) == 0:
+                    shape_data = [
+                        {'Shape Name': file,
+                         'Shape Class': current_class,
+                         'Number of Vertices': number_of_vertices,
+                         'Number of Faces': number_of_faces,
+                         'Type of Faces': 'Triangle',
+                         '3D Bounding Box': bounding_box}
+                    ]
+                else:
+                    shape_data.append({'Shape Name': file,
+                                       'Shape Class': current_class,
+                                       'Number of Vertices': number_of_vertices,
+                                       'Number of Faces': number_of_faces,
+                                       'Type of Faces': 'Triangle',
+                                       '3D Bounding Box': bounding_box})
     # Path to the CSV file
     csv_file_path = os.path.join('outputs', 'shape_data.csv')
 
