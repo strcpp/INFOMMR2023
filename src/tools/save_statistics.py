@@ -4,35 +4,36 @@ import csv
 import trimesh
 import json
 
+
 def save_refined(meshes):
     base = os.path.dirname(__file__)
-    models_path =os.path.join(base, '../../resources/models')
-    
+    models_path = os.path.join(base, '../../resources/models')
+
     shape_data = []
 
     for key, mesh in meshes.items():
         bounding_box = mesh[2].bounds
-        current_model_vertices = len(mesh[2].vertices) 
+        current_model_vertices = len(mesh[2].vertices)
         current_model_faces = len(mesh[2].faces)
-        
+
         # Save shape data
         if len(shape_data) == 0:
             shape_data = [
                 {'Shape Name': mesh[0],
-                    'Shape Class': mesh[1],
-                    'Number of Vertices': current_model_vertices,
-                    'Number of Faces': current_model_faces,
-                    'Type of Faces': 'Triangle',
-                    '3D Bounding Box': bounding_box}
+                 'Shape Class': mesh[1],
+                 'Number of Vertices': current_model_vertices,
+                 'Number of Faces': current_model_faces,
+                 'Type of Faces': 'Triangle',
+                 '3D Bounding Box': bounding_box}
             ]
         else:
             shape_data.append({'Shape Name': mesh[0],
-                                'Shape Class': mesh[1],
-                                'Number of Vertices': current_model_vertices,
-                                'Number of Faces': current_model_faces,
-                                'Type of Faces': 'Triangle',
-                                '3D Bounding Box': bounding_box})
-    
+                               'Shape Class': mesh[1],
+                               'Number of Vertices': current_model_vertices,
+                               'Number of Faces': current_model_faces,
+                               'Type of Faces': 'Triangle',
+                               '3D Bounding Box': bounding_box})
+
     # Path to the CSV file
     csv_file_path = os.path.join('outputs', 'shape_data_resampled.csv')
 
@@ -49,28 +50,29 @@ def save_refined(meshes):
     with open(csv_path, mode='a', newline='') as file:
         writer = csv.DictWriter(file, fieldnames=headers, delimiter=';')
         for shape in shape_data:
-            writer.writerow(shape)       
+            writer.writerow(shape)
+
 
 def save():
     """
     Saves shape data (filename, class name, number of vertices, number of faces, type of faces) to a CSV file
     """
     base = os.path.dirname(__file__)
-    models_path =os.path.join(base, '../../resources/models')
-    
+    models_path = os.path.join(base, '../../resources/models')
+
     shape_data = []
 
     # How many files to load from each class, usually to speed up devel
     try:
         with open('config.json', 'r') as file:
-                config = json.load(file)
+            config = json.load(file)
     except FileNotFoundError:
         with open('../../config.json', 'r') as file:
-                config = json.load(file)
+            config = json.load(file)
 
     # Iterate through all .obj files
     for root, dirs, files in tqdm(os.walk(models_path), desc="Parsing .obj files"):
-        if(len(files) > 0):
+        if len(files) > 0:
             len_files = len(files) if config['len_files'] == 0 else config['len_files']
 
             for i in range(len_files):

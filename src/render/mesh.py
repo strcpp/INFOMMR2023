@@ -5,12 +5,14 @@ from render.shaders import Shaders
 import trimesh
 import numpy as np
 
+
 class Mesh:
     """
     Reads all models/textures from the resources/models folder and creates corresponding GPU assets for them.
     (vao, textures) which can then be loaded into a "model" instance using their folder names.
     """
     _instance = None
+
     # mesh_name = ""
 
     @classmethod
@@ -36,19 +38,9 @@ class Mesh:
         self.app = app
         self.data = {}
 
-        # self.mesh_name = mesh_name
-
         start = time.time()
-        # models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
 
         self.set_data()
-        # for root, dirs, files in os.walk(models_path):
-        #     if len(files) > 0:
-        #             filename = files[0]
-        #             obj = self.app.load_scene(os.path.join(root, filename))
-        #             self.data[filename] = (obj.root_nodes[0].mesh.vao, None)
-        #             print(filename)
-        #             break
         end = time.time()
 
         print("elapsed??: ", end - start)
@@ -67,12 +59,12 @@ class Mesh:
         vertex_data = np.hstack((vertices, normals))
         vbo = self.app.ctx.buffer(vertex_data.astype('f4'))
         ibo = self.app.ctx.buffer(indices.astype('i4'))
-        
+
         vao_content = [
             (vbo, '3f 3f', 'in_position', 'in_normal'),
         ]
 
-        return  self.app.ctx.vertex_array(prog, vao_content, ibo)
+        return self.app.ctx.vertex_array(prog, vao_content, ibo)
 
     def set_data(self):
         models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
@@ -88,10 +80,3 @@ class Mesh:
                     file = files[i]
                     mesh = trimesh.load_mesh(os.path.join(root, file))
                     self.data[file] = (self.trimesh_to_vao(mesh, prog), None)
-                # obj = self.app.load_scene(os.path.join(root, file), attr_names = ['in_normal', 'in_position'])
-                # self.data[file] = (obj.root_nodes[0].mesh.vao, None)       
-            
-            # if len(files) > 0:
-            #     for file in files:
-            #             obj = self.app.load_scene(os.path.join(root, file))
-            #             self.data[file] = (obj.root_nodes[0].mesh.vao, None)

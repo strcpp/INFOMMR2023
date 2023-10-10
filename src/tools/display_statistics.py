@@ -3,9 +3,10 @@ import matplotlib.pyplot as plt
 import time
 from sklearn.neighbors import NearestNeighbors
 import os
-import numpy as np  
+import numpy as np
 
 csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
+
 
 def histogram(df, column_name, class_name, show):
     """
@@ -112,20 +113,24 @@ def save_histograms(show_histogram):
         if show_histogram:
             time.sleep(2)
 
-def return_bounding_box(model_name):
-    try:
-        df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
-    except FileNotFoundError:
-        new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
-        df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
-    shape = df[df['Shape Name'] == model_name]
-    bounding_box = shape.iloc[0]['3D Bounding Box']
-    # Remove unwanted characters like [ and ], then split by newline
-    lines = bounding_box.replace('[', '').replace(']', '').strip().split('\r\n')
+def return_bounding_box(model_name, mesh):
+    if model_name:
+        try:
+            df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
+        except FileNotFoundError:
+            new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
+            df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
-    # For each line, split by whitespace and convert to float
-    bounding_box = [list(map(float, line.split())) for line in lines]
+        shape = df[df['Shape Name'] == model_name]
+        bounding_box = shape.iloc[0]['3D Bounding Box']
+        # Remove unwanted characters like [ and ], then split by newline
+        lines = bounding_box.replace('[', '').replace(']', '').strip().split('\r\n')
+
+        # For each line, split by whitespace and convert to float
+        bounding_box = [list(map(float, line.split())) for line in lines]
+    else:
+        bounding_box = mesh.bounds
 
     # In case bounding box length is 1, for some reason
     if len(bounding_box) == 1:
