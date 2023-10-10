@@ -166,6 +166,13 @@ class BasicScene(Scene):
 
             self.poorly_sampled.append((Model(self.app, name, refined_mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box), name))
 
+        for i, models in self.models.items():
+            for model_name in models:
+                if model_name not in self.refined_meshes:
+                    bounding_box = return_bounding_box(model_name)
+                    self.poorly_sampled.append((Model(self.app, model_name, None), get_bb_lines(bounding_box), get_basis_lines(bounding_box), model_name))
+
+
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
             color=Vector3([1.0, 1.0, 1.0], dtype='f4')
