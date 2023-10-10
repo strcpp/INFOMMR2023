@@ -6,10 +6,14 @@ from light import Light
 import imgui
 import os
 from tools.display_statistics import return_neighbors, return_bounding_box
+from  tools.save_statistics import save_refined
 from tqdm import tqdm
 from moderngl_window.opengl.vao import VAOError
 from render.lines import Lines
 import moderngl
+import trimesh
+import numpy as np
+
 
 def get_bb_lines(bounding_box):
     x0, y0, z0 = bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]
@@ -35,7 +39,6 @@ def get_bb_lines(bounding_box):
     return connections
 
 def get_basis_lines(bounding_box):
-
     # Calculate the model's geometric center
     center_x = (bounding_box[0][0] + bounding_box[1][0]) / 2
     center_y = (bounding_box[0][1] + bounding_box[1][1]) / 2
@@ -60,6 +63,20 @@ def get_basis_lines(bounding_box):
     
     return connections
 
+def refine_mesh(mesh, target_faces = 1000):
+    if len(mesh.faces) == target_faces:
+        return mesh
+
+    #Subdivide until target reached
+    while len(mesh.faces) < target_faces:
+        mesh = mesh.subdivide()
+
+    #It will probably exceed the target, so decimate it back down
+    while len(mesh.faces) > target_faces:
+        mesh = mesh.simplify_quadratic_decimation(target_faces)
+
+    return mesh
+
 class BasicScene(Scene):
     """
     Implements the scene of the application.
@@ -79,25 +96,41 @@ class BasicScene(Scene):
     selected_model = 0
     models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
     average_model = None
+    refined_meshes = {}
     outliers = []
+    poorly_sampled = []
+    selected_poorly_sampled = 0
     lines = None
     model_bb = []
+    show_poorly_sampled = False
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
-
         # Load all models
+        
         for root, dirs, files in tqdm(os.walk(self.models_path), desc="Reading .obj files"):
-            for file in files:
-                model_class = os.path.basename(os.path.normpath(root))
-                if model_class not in self.models:
-                    self.models[model_class] = [file]
-                else:
-                    self.models[model_class].append(file)
+            if(len(files) > 0):
+                # How many files to load from each class, usually to speed up devel                
+                len_files = len(files) if self.app.config['len_files'] == 0 else self.app.config['len_files']
+                for i in range(len_files):
+                    file = files[i]
+                    model_class = os.path.basename(os.path.normpath(root))
+                    if model_class not in self.models:
+                        self.models[model_class] = [file]
+                    else:
+                        self.models[model_class].append(file)
 
-        # Get average model and 5 outliers
-        self.average_model, outliers = return_neighbors(10)
+        num_outliers = 10
+        # Get average model and outliers
+        self.average_model, all_neighbhors = return_neighbors(num_outliers)
+        outliers = all_neighbhors[-num_outliers:]
+        
+        condition = (all_neighbhors['Number of Faces'] < 100) | \
+            ((all_neighbhors['Number of Vertices'] < 100) & (all_neighbhors['Number of Faces'] > 0) & (all_neighbhors['Number of Vertices'] > 0))
 
+        poorly_sampled = all_neighbhors[condition]
+        self.show_poorly_sampled = True
+        self.show_wireframe = True
         self.current_model_name = self.average_model["Shape Name"]
         self.current_model = Model(self.app, self.current_model_name)
         self.current_class = self.average_model["Shape Class"]
@@ -105,9 +138,23 @@ class BasicScene(Scene):
         self.current_model_id = self.models[self.current_class].index(self.current_model_name)
         self.lines = Lines(self.app, line_width=1)
 
-        for outlier in outliers["Shape Name"]:
-            bounding_box = return_bounding_box(outlier)
-            self.outliers.append((Model(self.app, outlier), get_bb_lines(bounding_box), get_basis_lines(bounding_box)))
+        for i, outlier in outliers.iterrows():
+            name = outlier["Shape Name"]
+            bounding_box = return_bounding_box(name)
+            self.outliers.append((Model(self.app, name), get_bb_lines(bounding_box), get_basis_lines(bounding_box)))
+
+        for i, outlier in poorly_sampled.iterrows():
+            name = outlier["Shape Name"]
+            bounding_box = return_bounding_box(name)
+            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', outlier['Shape Class'], name)
+            mesh = trimesh.load_mesh(path)
+
+            print(f"Initial face count: {len(mesh.faces)}")
+            refined_mesh = refine_mesh(mesh, target_faces=1000)
+            self.refined_meshes[name] = (name, outlier['Shape Class'], refined_mesh)
+            print(f"Refined face count: {len(refined_mesh.faces)}")
+
+            self.poorly_sampled.append((Model(self.app, name, refined_mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box), name))
 
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
@@ -115,7 +162,6 @@ class BasicScene(Scene):
         )
 
         self.current_shading_mode = 0
-
         bounding_box = return_bounding_box(self.current_model_name)
         self.model_bb = get_bb_lines(bounding_box)
         self.model_basis = get_basis_lines(bounding_box)
@@ -168,6 +214,22 @@ class BasicScene(Scene):
             self.current_model.set_shading(shading_modes[self.current_shading_mode])
 
         clicked, self.show_wireframe = imgui.checkbox("Show Wireframe", self.show_wireframe)
+        clicked, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled", self.show_poorly_sampled)
+        if self.show_poorly_sampled:
+            _, self.selected_poorly_sampled = imgui.combo("Poorly Sampled Shapes", 
+                                                    self.selected_poorly_sampled, [shape[3] for shape in self.poorly_sampled])
+
+
+        if imgui.button("Save Refined Statistics"):
+            for model_class, model_name in self.models.items():
+                for name in model_name:
+                    if name not in self.refined_meshes:
+                        path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', model_class, name)
+                        self.refined_meshes[name] = (model_class, name, trimesh.load_mesh(path))
+
+            # print(self.refined_meshes)
+            save_refined(self.refined_meshes)
+            pass
 
         imgui.end()
         imgui.render()
@@ -182,16 +244,62 @@ class BasicScene(Scene):
         if self.show_wireframe:
             self.app.ctx.wireframe = True
 
-            self.current_model.color = [0, 0, 0]
+            if not self.show_poorly_sampled:
+                self.current_model.color = [0, 0, 0]
+                self.current_model.draw(
+                    self.app.camera.projection.matrix,
+                    self.app.camera.matrix,
+                    self.light
+                )
+
+                translation = 1
+                for outlier in self.outliers:
+                    outlier, bounds, = outlier[0],outlier[1]
+                    outlier.color = [1, 1, 1]
+                    try:
+                        outlier.draw(
+                            self.app.camera.projection.matrix,
+                            self.app.camera.matrix,
+                            self.light
+                        )
+                        outlier.translate(translation, 0)
+                        translation *= -1
+                        if translation > 0:
+                            translation += 1
+                    except VAOError:
+                        pass
+            else:
+                model = self.poorly_sampled[self.selected_poorly_sampled][0]
+                model.color = [0, 0, 0]
+                model.draw(
+                    self.app.camera.projection.matrix,
+                    self.app.camera.matrix,
+                    self.light
+                )
+
+            self.app.ctx.wireframe = False
+
+
+        if not self.show_poorly_sampled:
+            self.current_model.color = [1, 1, 1]
             self.current_model.draw(
                 self.app.camera.projection.matrix,
                 self.app.camera.matrix,
                 self.light
             )
 
+            self.lines.update(self.model_bb)
+            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, self.current_model.get_model_matrix())
+            self.lines.color = [0,0,1,1]
+            self.lines.update(self.model_basis)
+            self.app.ctx.depth_func = '1' # ALWAYS 
+            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, self.current_model.get_model_matrix())
+            self.app.ctx.depth_func = '<' # LESS
+            self.lines.color = [1,0,0,1]
+            
             translation = 1
             for outlier in self.outliers:
-                outlier, bounds, = outlier[0],outlier[1]
+                outlier, bounds, basis = outlier[0],outlier[1], outlier[2]
                 outlier.color = [1, 1, 1]
                 try:
                     outlier.draw(
@@ -203,56 +311,37 @@ class BasicScene(Scene):
                     translation *= -1
                     if translation > 0:
                         translation += 1
+                        
+                    self.lines.update(bounds)
+                    self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, outlier.get_model_matrix())
+                    self.lines.color = [0,0,1,1]
+                    self.app.ctx.depth_func = '1' # ALWAYS 
+                    self.lines.update(basis)
+                    self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, outlier.get_model_matrix())
+                    self.app.ctx.depth_func = '<' # LESS
+                    self.lines.color = [1,0,0,1]
+
                 except VAOError:
                     pass
+        else:
+            sample = self.poorly_sampled[self.selected_poorly_sampled] 
+            model = sample[0]
+            model.color = [1, 1, 1]
+            model.draw(
+                self.app.camera.projection.matrix,
+                self.app.camera.matrix,
+                self.light
+            )
 
-            self.app.ctx.wireframe = False
-
-        # Not sure how to draw it
-
-        self.current_model.color = [1, 1, 1]
-
-        self.current_model.draw(
-            self.app.camera.projection.matrix,
-            self.app.camera.matrix,
-            self.light
-        )
-
-        self.lines.update(self.model_bb)
-        self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, self.current_model.get_model_matrix())
-        self.lines.color = [0,0,1,1]
-        self.lines.update(self.model_basis)
-        self.app.ctx.depth_func = '1' # ALWAYS 
-        self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, self.current_model.get_model_matrix())
-        self.app.ctx.depth_func = '<' # LESS
-        self.lines.color = [1,0,0,1]
-        
-        translation = 1
-        for outlier in self.outliers:
-            outlier, bounds, basis = outlier[0],outlier[1], outlier[2]
-            outlier.color = [1, 1, 1]
-            try:
-                outlier.draw(
-                    self.app.camera.projection.matrix,
-                    self.app.camera.matrix,
-                    self.light
-                )
-                outlier.translate(translation, 0)
-                translation *= -1
-                if translation > 0:
-                    translation += 1
-                    
-                self.lines.update(bounds)
-                self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, outlier.get_model_matrix())
-                self.lines.color = [0,0,1,1]
-                self.app.ctx.depth_func = '1' # ALWAYS 
-                self.lines.update(basis)
-                self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, outlier.get_model_matrix())
-                self.app.ctx.depth_func = '<' # LESS
-                self.lines.color = [1,0,0,1]
-
-            except VAOError:
-                pass
+            self.lines.update(sample[1])
+            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, model.get_model_matrix())
+            self.lines.color = [0,0,1,1]
+            self.lines.update(sample[2])
+            self.app.ctx.depth_func = '1' # ALWAYS 
+            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, model.get_model_matrix())
+            self.app.ctx.depth_func = '<' # LESS
+            self.lines.color = [1,0,0,1]
+            
 
         self.render_ui()
 

@@ -9,7 +9,7 @@ import imgui
 from moderngl_window.integrations.imgui import ModernglWindowRenderer
 from typing import Any, Tuple
 from moderngl_window.text.bitmapped import TextWriter2D
-
+import json
 
 class App(glw.WindowConfig):
     """
@@ -39,6 +39,9 @@ class App(glw.WindowConfig):
         self.mouse_button = 0
         self.mpos = (0, 0)
         self.mdelta = (0, 0)
+
+        with open('config.json', 'r') as file:
+            self.config = json.load(file)
 
         # initialize all assets
         Shaders.instance(self)

@@ -11,20 +11,22 @@ class Model:
     Represents a 3D model.
     """
 
-    def __init__(self, app, mesh_name: str) -> None:
+    def __init__(self, app, mesh_name: str, mesh = None) -> None:
         """
         Constructor.
         :param app: Glw app.
         :param mesh_name: Name of the model's mesh.
         """
         meshes = Mesh.instance(mesh_name)
-        meshes.set_mesh_name(mesh_name)
-        meshes.set_data()
-        self.app = app
-        self.command = meshes.data[mesh_name]
-
+        # meshes.set_mesh_name(mesh_name)
+        # meshes.set_data()
         programs = Shaders.instance()
         self.prog = programs.get('base-flat')
+        self.app = app
+        self.command = meshes.data[mesh_name]
+        if mesh is not None:
+            new_vao = meshes.trimesh_to_vao(mesh, self.prog)
+            self.command = (new_vao, self.command[1])
 
         self.translation = Vector3()
         self.rotation = Quaternion()
@@ -103,7 +105,7 @@ class Model:
         :param light: Scene light.
         """
         command = self.command
-        texture, vao = command[1], command[0].instance(self.prog)
+        texture, vao = command[1], command[0]
 
         prog = self.prog
         prog['light.Ia'].write(light.Ia)

@@ -2,7 +2,8 @@ import os
 import time
 from tqdm import tqdm
 from render.shaders import Shaders
-
+import trimesh
+import numpy as np
 
 class Mesh:
     """
@@ -10,7 +11,7 @@ class Mesh:
     (vao, textures) which can then be loaded into a "model" instance using their folder names.
     """
     _instance = None
-    mesh_name = ""
+    # mesh_name = ""
 
     @classmethod
     def instance(cls, ctx=None, mesh_name="") -> object:
@@ -35,25 +36,19 @@ class Mesh:
         self.app = app
         self.data = {}
 
-        self.mesh_name = mesh_name
+        # self.mesh_name = mesh_name
 
         start = time.time()
-        models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
+        # models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
 
-        for root, dirs, files in os.walk(models_path):
-            if len(files) > 0:
-                if self.mesh_name == "":
-                    filename = files[0]
-                    obj = self.app.load_scene(os.path.join(root, filename))
-                    self.data[filename] = (obj.root_nodes[0].mesh.vao, None)
-                    break
-                else:
-                    for file in files:
-                        if file == self.mesh_name:
-                            obj = self.app.load_scene(os.path.join(root, file))
-                            self.data[file] = (obj.root_nodes[0].mesh.vao, None)
-                            break
-
+        self.set_data()
+        # for root, dirs, files in os.walk(models_path):
+        #     if len(files) > 0:
+        #             filename = files[0]
+        #             obj = self.app.load_scene(os.path.join(root, filename))
+        #             self.data[filename] = (obj.root_nodes[0].mesh.vao, None)
+        #             print(filename)
+        #             break
         end = time.time()
 
         print("elapsed??: ", end - start)
@@ -64,13 +59,39 @@ class Mesh:
     def get_mesh_name(self):
         return self.mesh_name
 
+    def trimesh_to_vao(self, mesh, prog):
+        vertices = mesh.vertices
+        normals = mesh.vertex_normals
+        indices = mesh.faces.flatten()
+
+        vertex_data = np.hstack((vertices, normals))
+        vbo = self.app.ctx.buffer(vertex_data.astype('f4'))
+        ibo = self.app.ctx.buffer(indices.astype('i4'))
+        
+        vao_content = [
+            (vbo, '3f 3f', 'in_position', 'in_normal'),
+        ]
+
+        return  self.app.ctx.vertex_array(prog, vao_content, ibo)
+
     def set_data(self):
         models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
+        programs = Shaders.instance()
+        prog = programs.get('base-flat')
 
-        for root, dirs, files in os.walk(models_path):
+        for root, dirs, files in tqdm(os.walk(models_path), desc="Reading .obj files"):
+            # Only reading first file for now, otherwise startup is too slow
             if len(files) > 0:
-                for file in files:
-                    if file == self.mesh_name:
-                        obj = self.app.load_scene(os.path.join(root, file))
-                        self.data[file] = (obj.root_nodes[0].mesh.vao, None)
-                        break
+                len_files = len(files) if self.app.config['len_files'] == 0 else self.app.config['len_files']
+
+                for i in range(len_files):
+                    file = files[i]
+                    mesh = trimesh.load_mesh(os.path.join(root, file))
+                    self.data[file] = (self.trimesh_to_vao(mesh, prog), None)
+                # obj = self.app.load_scene(os.path.join(root, file), attr_names = ['in_normal', 'in_position'])
+                # self.data[file] = (obj.root_nodes[0].mesh.vao, None)       
+            
+            # if len(files) > 0:
+            #     for file in files:
+            #             obj = self.app.load_scene(os.path.join(root, file))
+            #             self.data[file] = (obj.root_nodes[0].mesh.vao, None)

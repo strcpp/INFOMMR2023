@@ -3,9 +3,9 @@ import matplotlib.pyplot as plt
 import time
 from sklearn.neighbors import NearestNeighbors
 import os
+import numpy as np  
 
 csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
-
 
 def histogram(df, column_name, class_name, show):
     """
@@ -76,9 +76,9 @@ def return_neighbors(number_of_outliers: int):
 
     # Find nearest neighbor and 5 farthest neighbors
     nearest_neighbor_index = all_neighbors_indices[0]
-    farthest_neighbors_indices = all_neighbors_indices[-number_of_outliers:]
+    # farthest_neighbors_indices = all_neighbors_indices[-number_of_outliers:]
 
-    return df.iloc[nearest_neighbor_index], df.iloc[farthest_neighbors_indices]
+    return df.iloc[nearest_neighbor_index], df.iloc[all_neighbors_indices]
 
 
 def save_histograms(show_histogram):
@@ -111,7 +111,6 @@ def save_histograms(show_histogram):
 
         if show_histogram:
             time.sleep(2)
-
 
 def return_bounding_box(model_name):
     try:
