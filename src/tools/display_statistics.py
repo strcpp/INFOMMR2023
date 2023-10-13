@@ -49,10 +49,10 @@ def histogram(df, column_name, class_name, show):
         plt.show()
 
 
-def return_neighbors(number_of_outliers: int):
+def return_neighbors():
     """
     Returns the nearest neighbor to the average shape as well as the 5 farthest neighbors (outliers).
-    :param number_of_outliers: Determines how many outliers will be returned
+    :return: Average shapes and all shapes
     """
     try:
         df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
@@ -77,7 +77,6 @@ def return_neighbors(number_of_outliers: int):
 
     # Find nearest neighbor and 5 farthest neighbors
     nearest_neighbor_index = all_neighbors_indices[0]
-    # farthest_neighbors_indices = all_neighbors_indices[-number_of_outliers:]
 
     return df.iloc[nearest_neighbor_index], df.iloc[all_neighbors_indices]
 

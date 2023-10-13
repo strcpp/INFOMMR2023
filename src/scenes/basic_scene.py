@@ -129,11 +129,12 @@ class BasicScene(Scene):
 
         num_outliers = 10
         # Get average model and outliers
-        self.average_model, all_neighbors = return_neighbors(num_outliers)
+        self.average_model, all_neighbors = return_neighbors()
 
         # Condition for poorly sampled shapes
         condition = (((all_neighbors['Number of Faces'] < 100) | (all_neighbors['Number of Vertices'] < 100) |
                       (all_neighbors['Number of Faces'] > 50000) | (all_neighbors['Number of Vertices'] > 50000)))
+
         poorly_sampled = all_neighbors[condition]
 
         self.show_poorly_sampled = True
