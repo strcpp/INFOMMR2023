@@ -12,7 +12,6 @@ from moderngl_window.opengl.vao import VAOError
 from render.lines import Lines
 import trimesh
 import numpy as np
-from numba import jit
 
 
 def get_bb_lines(bounding_box):
@@ -83,21 +82,6 @@ def refine_mesh(mesh, target_faces_min=1000, target_faces_max=50000):
         mesh = mesh.simplify_quadratic_decimation(target_faces_min)
 
     return mesh
-
-
-@jit(nopython=True)
-def normalize_orientation(centers, vertices):
-    f = np.zeros(3)
-    for center in centers:
-        f[0] += (np.sign(center[0]) * np.power(center[0], 2))
-        f[1] += (np.sign(center[1]) * np.power(center[1], 2))
-        f[2] += (np.sign(center[2]) * np.power(center[2], 2))
-
-    for vertex in vertices:
-        vertex[0] *= np.sign(f[0])
-        vertex[1] *= np.sign(f[1])
-        vertex[2] *= np.sign(f[2])
-    return vertices
 
 
 class BasicScene(Scene):
