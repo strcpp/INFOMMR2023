@@ -1,16 +1,18 @@
 from render.model import Model
 from render.skybox import Skybox
 from scenes.scene import Scene
-from pyrr import Vector3
+from pyrr import Vector3, matrix44
 from light import Light
 import imgui
 import os
 from tools.display_statistics import return_neighbors, return_bounding_box
-from tools.save_statistics import save_refined
+from tools.save_statistics import save_data
 from tqdm import tqdm
 from moderngl_window.opengl.vao import VAOError
 from render.lines import Lines
 import trimesh
+import numpy as np
+from numba import jit
 
 
 def get_bb_lines(bounding_box):
@@ -37,11 +39,14 @@ def get_bb_lines(bounding_box):
     return connections
 
 
-def get_basis_lines(bounding_box):
+def get_basis_lines(bounding_box, barycenter):
     # Calculate the model's geometric center
-    center_x = (bounding_box[0][0] + bounding_box[1][0]) / 2
-    center_y = (bounding_box[0][1] + bounding_box[1][1]) / 2
-    center_z = (bounding_box[0][2] + bounding_box[1][2]) / 2
+    if bounding_box is not None:
+        center_x = (bounding_box[0][0] + bounding_box[1][0]) / 2
+        center_y = (bounding_box[0][1] + bounding_box[1][1]) / 2
+        center_z = (bounding_box[0][2] + bounding_box[1][2]) / 2
+    else:
+        center_x, center_y, center_z = barycenter
 
     center = (center_x, center_y, center_z)
 
@@ -80,6 +85,21 @@ def refine_mesh(mesh, target_faces_min=1000, target_faces_max=50000):
     return mesh
 
 
+@jit(nopython=True)
+def normalize_orientation(centers, vertices):
+    f = np.zeros(3)
+    for center in centers:
+        f[0] += (np.sign(center[0]) * np.power(center[0], 2))
+        f[1] += (np.sign(center[1]) * np.power(center[1], 2))
+        f[2] += (np.sign(center[2]) * np.power(center[2], 2))
+
+    for vertex in vertices:
+        vertex[0] *= np.sign(f[0])
+        vertex[1] *= np.sign(f[1])
+        vertex[2] *= np.sign(f[2])
+    return vertices
+
+
 class BasicScene(Scene):
     """
     Implements the scene of the application.
@@ -100,7 +120,6 @@ class BasicScene(Scene):
     models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
     average_model = None
     refined_meshes = {}
-    outliers = []
     poorly_sampled = []
     selected_poorly_sampled = 0
     lines = None
@@ -110,6 +129,7 @@ class BasicScene(Scene):
     model_basis = None
     show_normalized = False
     selected_normalized = 0
+    move_axes_to_barycenter = False
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -127,7 +147,6 @@ class BasicScene(Scene):
                     else:
                         self.models[model_class].append(file)
 
-        num_outliers = 10
         # Get average model and outliers
         self.average_model, all_neighbors = return_neighbors()
 
@@ -158,8 +177,9 @@ class BasicScene(Scene):
             self.refined_meshes[name] = (name, outlier['Shape Class'], refined_mesh)
 
             self.poorly_sampled.append(
-                (Model(self.app, name, refined_mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box), name,
-                 model_class))
+                (Model(self.app, name, refined_mesh), get_bb_lines(bounding_box),
+                 get_basis_lines(bounding_box, None),
+                 get_basis_lines(None, refined_mesh.centroid), name, model_class))
 
         # Normalizing all shapes after resampling
         self.normalized = self.poorly_sampled.copy()
@@ -168,7 +188,7 @@ class BasicScene(Scene):
                 if model_name not in self.refined_meshes:
                     bounding_box = return_bounding_box(model_name, None)
                     self.normalized.append((Model(self.app, model_name, None), get_bb_lines(bounding_box),
-                                            get_basis_lines(bounding_box), model_name, model_class))
+                                            get_basis_lines(bounding_box, None), None, model_name, model_class))
 
         for i, model in tqdm(enumerate(self.normalized), desc="Normalizing shapes"):
             model_class = model[-1]
@@ -176,21 +196,36 @@ class BasicScene(Scene):
             path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', model_class, name)
             mesh = trimesh.load_mesh(path)
 
-            barycenter = mesh.center_mass
+            # Step 2: Translation
+            barycenter = mesh.centroid
+            mesh.apply_translation(-barycenter)
 
-            translation_vector = -barycenter
-            mesh.apply_translation(translation_vector)
+            # Step 3: Pose (alignment)
+            covariance_matrix = np.cov(np.transpose(mesh.vertices))
+            eig_values, eig_vectors = np.linalg.eig(covariance_matrix)
+            sorted_indices = np.argsort(eig_values)[::-1]
+            major = eig_vectors[:, sorted_indices[0]]
+            medium = eig_vectors[:, sorted_indices[1]]
+            minor = np.cross(major, medium)
 
+            eigenvectors = np.array([major, medium, minor])
+
+            mesh = trimesh.Trimesh(np.dot(mesh.vertices, eigenvectors), mesh.faces)
+
+            # Step 4: Orientation
+            f = np.sum(np.sign(mesh.triangles_center) * (np.square(mesh.triangles_center)))
+            mesh = trimesh.Trimesh((mesh.vertices * np.sign(f)), mesh.faces)
+
+            # Step 5: Size
             max_dimension = max(mesh.extents)
-
             scale_factor = 1.0 / max_dimension
             mesh.apply_scale(scale_factor)
 
             bounding_box = return_bounding_box(None, mesh)
 
             self.normalized[i] = (
-                Model(self.app, name, mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box),
-                name, model_class)
+                Model(self.app, name, mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box, None),
+                get_basis_lines(None, mesh.centroid), name,  model_class)
 
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
@@ -199,8 +234,9 @@ class BasicScene(Scene):
 
         self.current_shading_mode = 0
         bounding_box = return_bounding_box(self.current_model_name, None)
+
         self.model_bb = get_bb_lines(bounding_box)
-        self.model_basis = get_basis_lines(bounding_box)
+        self.model_basis = get_basis_lines(bounding_box, None)
 
     def unload(self) -> None:
         pass
@@ -254,13 +290,16 @@ class BasicScene(Scene):
         if self.show_poorly_sampled:
             _, self.selected_poorly_sampled = imgui.combo("Poorly Sampled Shapes",
                                                           self.selected_poorly_sampled,
-                                                          [shape[3] for shape in self.poorly_sampled])
+                                                          [shape[4] for shape in self.poorly_sampled])
 
         clicked, self.show_normalized = imgui.checkbox("Show Normalized", self.show_normalized)
         if self.show_normalized:
             _, self.selected_normalized = imgui.combo("Normalized Shapes",
                                                       self.selected_normalized,
-                                                      [shape[3] for shape in self.normalized])
+                                                      [f"{shape[4]}({shape[5]})" for shape in self.normalized])
+
+        clicked, self.move_axes_to_barycenter = imgui.checkbox("Move Aces to Barycenter",
+                                                               self.move_axes_to_barycenter)
 
         if imgui.button("Save Refined Statistics"):
             for model_class, model_name in self.models.items():
@@ -269,7 +308,7 @@ class BasicScene(Scene):
                         path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', model_class,
                                             name)
                         self.refined_meshes[name] = (model_class, name, trimesh.load_mesh(path))
-            save_refined(self.refined_meshes)
+            save_data(self.refined_meshes)
             pass
 
         imgui.end()
@@ -293,22 +332,6 @@ class BasicScene(Scene):
                     self.light
                 )
 
-                translation = 1
-                for outlier in self.outliers:
-                    outlier, bounds, = outlier[0], outlier[1]
-                    outlier.color = [1, 1, 1]
-                    try:
-                        outlier.draw(
-                            self.app.camera.projection.matrix,
-                            self.app.camera.matrix,
-                            self.light
-                        )
-                        outlier.translate(translation, 0)
-                        translation *= -1
-                        if translation > 0:
-                            translation += 1
-                    except VAOError:
-                        pass
             elif self.show_poorly_sampled:
                 model = self.poorly_sampled[self.selected_poorly_sampled][0]
                 model.color = [0, 0, 0]
@@ -318,7 +341,7 @@ class BasicScene(Scene):
                     self.light
                 )
 
-            elif self.show_normalized:
+            else:
                 model = self.normalized[self.selected_normalized][0]
                 model.color = [0, 0, 0]
                 model.draw(
@@ -327,7 +350,7 @@ class BasicScene(Scene):
                     self.light
                 )
 
-            self.app.ctx.wireframe = False
+        self.app.ctx.wireframe = False
 
         if not self.show_poorly_sampled and not self.show_normalized:
             self.current_model.color = [1, 1, 1]
@@ -336,46 +359,7 @@ class BasicScene(Scene):
                 self.app.camera.matrix,
                 self.light
             )
-
-            self.lines.update(self.model_bb)
-            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
-                            self.current_model.get_model_matrix())
-            self.lines.color = [0, 0, 1, 1]
-            self.lines.update(self.model_basis)
-            self.app.ctx.depth_func = '1'  # ALWAYS
-            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
-                            self.current_model.get_model_matrix())
-            self.app.ctx.depth_func = '<'  # LESS
-            self.lines.color = [1, 0, 0, 1]
-
-            translation = 1
-            for outlier in self.outliers:
-                outlier, bounds, basis = outlier[0], outlier[1], outlier[2]
-                outlier.color = [1, 1, 1]
-                try:
-                    outlier.draw(
-                        self.app.camera.projection.matrix,
-                        self.app.camera.matrix,
-                        self.light
-                    )
-                    outlier.translate(translation, 0)
-                    translation *= -1
-                    if translation > 0:
-                        translation += 1
-
-                    self.lines.update(bounds)
-                    self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
-                                    outlier.get_model_matrix())
-                    self.lines.color = [0, 0, 1, 1]
-                    self.app.ctx.depth_func = '1'  # ALWAYS
-                    self.lines.update(basis)
-                    self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
-                                    outlier.get_model_matrix())
-                    self.app.ctx.depth_func = '<'  # LESS
-                    self.lines.color = [1, 0, 0, 1]
-
-                except VAOError:
-                    pass
+            sample = None
         elif self.show_poorly_sampled:
             sample = self.poorly_sampled[self.selected_poorly_sampled]
             model = sample[0]
@@ -385,17 +369,11 @@ class BasicScene(Scene):
                 self.app.camera.matrix,
                 self.light
             )
+            self.model_bb = sample[1]
+            self.current_model = model
+            self.model_basis = sample[3] if self.move_axes_to_barycenter else sample[2]
 
-            self.lines.update(sample[1])
-            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, model.get_model_matrix())
-            self.lines.color = [0, 0, 1, 1]
-            self.lines.update(sample[2])
-            self.app.ctx.depth_func = '1'  # ALWAYS
-            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, model.get_model_matrix())
-            self.app.ctx.depth_func = '<'  # LESS
-            self.lines.color = [1, 0, 0, 1]
-
-        elif self.show_normalized:
+        else:
             sample = self.normalized[self.selected_normalized]
             model = sample[0]
             model.color = [1, 1, 1]
@@ -404,14 +382,19 @@ class BasicScene(Scene):
                 self.app.camera.matrix,
                 self.light
             )
+            self.model_bb = sample[1]
+            self.current_model = model
+            self.model_basis = sample[3] if self.move_axes_to_barycenter else sample[2]
 
-            self.lines.update(sample[1])
-            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, model.get_model_matrix())
-            self.lines.color = [0, 0, 1, 1]
-            self.lines.update(sample[2])
-            self.app.ctx.depth_func = '1'  # ALWAYS
-            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix, model.get_model_matrix())
-            self.app.ctx.depth_func = '<'  # LESS
-            self.lines.color = [1, 0, 0, 1]
+        self.lines.update(self.model_bb)
+        self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
+                        self.current_model.get_model_matrix())
+        self.lines.color = [0, 0, 1, 1]
+        self.lines.update(self.model_basis)
+        self.app.ctx.depth_func = '1'  # ALWAYS
+        self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
+                        self.current_model.get_model_matrix())
+        self.app.ctx.depth_func = '<'  # LESS
+        self.lines.color = [1, 0, 0, 1]
 
         self.render_ui()
