@@ -194,7 +194,7 @@ class BasicScene(Scene):
 
             eigenvectors = np.array([major, medium, minor])
 
-            mesh = trimesh.Trimesh(np.dot(mesh.vertices, eigenvectors), mesh.faces)
+            mesh = trimesh.Trimesh(np.dot(mesh.vertices - mesh.centroid, eigenvectors), mesh.faces)
 
             # Step 4: Orientation
             f = np.sum(np.sign(mesh.triangles_center) * (np.square(mesh.triangles_center)))
@@ -282,7 +282,7 @@ class BasicScene(Scene):
                                                       self.selected_normalized,
                                                       [f"{shape[4]}({shape[5]})" for shape in self.normalized])
 
-        clicked, self.move_axes_to_barycenter = imgui.checkbox("Move Aces to Barycenter",
+        clicked, self.move_axes_to_barycenter = imgui.checkbox("Move Axes to Barycenter",
                                                                self.move_axes_to_barycenter)
 
         if imgui.button("Save Refined Statistics"):
