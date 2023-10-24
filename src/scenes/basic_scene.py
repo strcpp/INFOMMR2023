@@ -12,7 +12,7 @@ from moderngl_window.opengl.vao import VAOError
 from render.lines import Lines
 import trimesh
 import numpy as np
-
+from  tools.descriptor_extraction import *
 
 def get_bb_lines(bounding_box):
     x0, y0, z0 = bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]
@@ -204,12 +204,13 @@ class BasicScene(Scene):
             max_dimension = max(mesh.extents)
             scale_factor = 1.0 / max_dimension
             mesh.apply_scale(scale_factor)
-
             bounding_box = return_bounding_box(None, mesh)
+            descriptors = ShapeDescriptors(mesh, model_class, name)
 
             self.normalized[i] = (
                 Model(self.app, name, mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box, None),
-                get_basis_lines(None, mesh.centroid), name,  model_class)
+                get_basis_lines(None, mesh.centroid), name,  model_class, descriptors)
+
 
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
@@ -296,6 +297,32 @@ class BasicScene(Scene):
             pass
 
         imgui.end()
+
+        if self.show_normalized:
+            descriptors = self.normalized[self.selected_normalized][6]
+
+            imgui.set_next_window_position(self.app.window_size[0] - 300, 0, imgui.ONCE)
+            # imgui.set_next_window_size(300, imgui.CONTENT_SIZE_FIT)
+
+            if imgui.begin("Descriptors", True):
+                imgui.text("{}: {:.2f}".format("Surface area", descriptors.surface_area))
+                imgui.text("{}: {:.2f}".format("Compactness", descriptors.compactness))
+                imgui.text("{}: {:.2f}".format("Rectangularity", descriptors.rectangularity))
+                imgui.text("{}: {:.2f}".format("Diameter", descriptors.diameter))
+                imgui.text("{}: {:.2f}".format("Convexity", descriptors.convexity))
+                imgui.text("{}: {:.2f}".format("Eccentricity", descriptors.eccentricity))
+
+                if imgui.button("Save Distributions"):
+                    descriptors.save_A3_histogram_image()
+                    descriptors.save_D1_histogram_image()
+                    descriptors.save_D2_histogram_image()
+                    descriptors.save_D3_histogram_image()
+                    descriptors.save_D4_histogram_image()
+
+
+            # End the window
+            imgui.end()
+
         imgui.render()
 
         self.app.imgui.render(imgui.get_draw_data())

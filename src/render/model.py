@@ -25,6 +25,7 @@ class Model:
         self.app = app
         self.command = meshes.data[mesh_name]
         if mesh is not None:
+            self.mesh = mesh
             new_vao = meshes.trimesh_to_vao(mesh, self.prog)
             self.command = (new_vao, self.command[1])
 
@@ -46,6 +47,12 @@ class Model:
 
     def update(self, dt: float, interpolation_method: str) -> None:
         pass
+
+    def get_mesh(self):
+        """
+            returns the stored trimesh instance
+        """
+        return self.mesh
 
     def set_color(self, color):
         self.color = color
