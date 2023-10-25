@@ -8,11 +8,12 @@ import os
 from tools.display_statistics import return_neighbors, return_bounding_box
 from tools.save_statistics import save_data
 from tqdm import tqdm
-from moderngl_window.opengl.vao import VAOError
 from render.lines import Lines
 import trimesh
 import numpy as np
-from  tools.descriptor_extraction import *
+from tools.descriptor_extraction import *
+from numba import njit
+
 
 def get_bb_lines(bounding_box):
     x0, y0, z0 = bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]
@@ -84,6 +85,39 @@ def refine_mesh(mesh, target_faces_min=1000, target_faces_max=50000):
     return mesh
 
 
+def normalize_single_features(mesh_features):
+    feature_values = [descriptor.get_single_features() for descriptor in mesh_features]
+
+    features_array = np.array(feature_values)
+
+    mean = np.mean(features_array, axis=0)
+    std = np.std(features_array, axis=0)
+
+    standardized_features = (features_array - mean) / std
+
+    for i, descriptor in enumerate(mesh_features):
+        descriptor.normalize_single_features(standardized_features[i])
+
+
+@njit
+def euclidean_distance(x1, x2):
+    return np.sqrt(np.sum((x1 - x2) ** 2))
+
+
+from scipy.stats import wasserstein_distance
+
+
+def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
+    distances = np.zeros(len(all_meshes))
+    for i in range(len(all_meshes)):
+        x1 = np.array(current_mesh.get_normalized_single_features())
+        x2 = np.array(all_meshes[i][6].get_normalized_single_features())
+        distances[i] = euclidean_distance(x1, x2)
+    sorted_distances = np.argsort(distances)[:num_neighbors]
+    best_matching_shapes = [all_meshes[k] for k in sorted_distances]
+    return best_matching_shapes
+
+
 class BasicScene(Scene):
     """
     Implements the scene of the application.
@@ -114,6 +148,9 @@ class BasicScene(Scene):
     show_normalized = False
     selected_normalized = 0
     move_axes_to_barycenter = False
+    show_rest_of_ui = False
+    neighbor_count = 1
+    best_matching_shapes = []
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -209,8 +246,7 @@ class BasicScene(Scene):
 
             self.normalized[i] = (
                 Model(self.app, name, mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box, None),
-                get_basis_lines(None, mesh.centroid), name,  model_class, descriptors)
-
+                get_basis_lines(None, mesh.centroid), name, model_class, descriptors)
 
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
@@ -276,12 +312,17 @@ class BasicScene(Scene):
             _, self.selected_poorly_sampled = imgui.combo("Poorly Sampled Shapes",
                                                           self.selected_poorly_sampled,
                                                           [shape[4] for shape in self.poorly_sampled])
+            self.show_normalized = False
 
         clicked, self.show_normalized = imgui.checkbox("Show Normalized", self.show_normalized)
+
         if self.show_normalized:
-            _, self.selected_normalized = imgui.combo("Normalized Shapes",
-                                                      self.selected_normalized,
-                                                      [f"{shape[4]}({shape[5]})" for shape in self.normalized])
+            changed, self.selected_normalized = imgui.combo("Normalized Shapes",
+                                                            self.selected_normalized,
+                                                            [f"{shape[4]}({shape[5]})" for shape in self.normalized])
+            self.show_poorly_sampled = False
+            if changed:
+                self.best_matching_shapes = []
 
         clicked, self.move_axes_to_barycenter = imgui.checkbox("Move Axes to Barycenter",
                                                                self.move_axes_to_barycenter)
@@ -295,8 +336,6 @@ class BasicScene(Scene):
                         self.refined_meshes[name] = (model_class, name, trimesh.load_mesh(path))
             save_data(self.refined_meshes)
             pass
-
-        imgui.end()
 
         if self.show_normalized:
             descriptors = self.normalized[self.selected_normalized][6]
@@ -319,10 +358,24 @@ class BasicScene(Scene):
                     descriptors.save_D3_histogram_image()
                     descriptors.save_D4_histogram_image()
 
-
             # End the window
             imgui.end()
 
+        if self.show_normalized:
+            if imgui.button("Compute Distance to all Shapes"):
+                normalize_single_features([element[6] for element in self.normalized])
+                self.show_rest_of_ui = True
+
+        if self.show_rest_of_ui:
+            _, self.neighbor_count = imgui.input_int("Number of Returned Shapes", self.neighbor_count)
+
+            if imgui.button("Get Best-Matching Shapes"):
+                self.best_matching_shapes = get_best_matching_shapes(
+                    self.normalized[self.selected_normalized][6],
+                    [model for model in self.normalized if model[4] != self.normalized[self.selected_normalized][4]],
+                    self.neighbor_count)
+
+        imgui.end()
         imgui.render()
 
         self.app.imgui.render(imgui.get_draw_data())
@@ -360,6 +413,22 @@ class BasicScene(Scene):
                     self.app.camera.matrix,
                     self.light
                 )
+                model.translate(0, 0)
+
+                translation = 2
+                for match in self.best_matching_shapes:
+                    model = match[0]
+                    model.color = [0, 0, 0]
+                    model.draw(
+                        self.app.camera.projection.matrix,
+                        self.app.camera.matrix,
+                        self.light
+                    )
+
+                    model.translate(translation, 0)
+                    translation *= -1
+                    if translation > 0:
+                        translation += 2
 
         self.app.ctx.wireframe = False
 
@@ -370,7 +439,6 @@ class BasicScene(Scene):
                 self.app.camera.matrix,
                 self.light
             )
-            sample = None
         elif self.show_poorly_sampled:
             sample = self.poorly_sampled[self.selected_poorly_sampled]
             model = sample[0]
@@ -396,6 +464,36 @@ class BasicScene(Scene):
             self.model_bb = sample[1]
             self.current_model = model
             self.model_basis = sample[3] if self.move_axes_to_barycenter else sample[2]
+            model.translate(0, 0)
+
+            translation = 2
+            for match in self.best_matching_shapes:
+                model = match[0]
+                model.color = [1, 1, 1]
+                model.draw(
+                    self.app.camera.projection.matrix,
+                    self.app.camera.matrix,
+                    self.light
+                )
+
+                model.translate(translation, 0)
+                translation *= -1
+                if translation > 0:
+                    translation += 2
+
+                model_bb = match[1]
+                model_basis = match[3] if self.move_axes_to_barycenter else match[2]
+
+                self.lines.update(model_bb)
+                self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
+                                model.get_model_matrix())
+                self.lines.color = [0, 0, 1, 1]
+                self.lines.update(model_basis)
+                self.app.ctx.depth_func = '1'  # ALWAYS
+                self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
+                                model.get_model_matrix())
+                self.app.ctx.depth_func = '<'  # LESS
+                self.lines.color = [1, 0, 0, 1]
 
         self.lines.update(self.model_bb)
         self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
