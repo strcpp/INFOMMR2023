@@ -1,3 +1,4 @@
+import moderngl
 from render.mesh import Mesh
 import numpy as np
 from typing import Optional
@@ -11,7 +12,7 @@ class Model:
     Represents a 3D model.
     """
 
-    def __init__(self, app, mesh_name: str, mesh = None) -> None:
+    def __init__(self, app, mesh_name: str, mesh=None) -> None:
         """
         Constructor.
         :param app: Glw app.
@@ -104,7 +105,7 @@ class Model:
 
         return np.array(model, dtype='f4')
 
-    def draw(self, proj_matrix: Matrix44, view_matrix: Matrix44, light: Light) -> None:
+    def draw(self, proj_matrix: Matrix44, view_matrix: Matrix44, light: Light, draw_points=False) -> None:
         """
         Draws a 3D model.
         :param proj_matrix: Projection matrix.
@@ -131,4 +132,7 @@ class Model:
         if texture is not None:
             texture.use()
 
-        vao.render()
+        if draw_points:
+            vao.render(mode=moderngl.POINTS)
+        else:
+            vao.render()

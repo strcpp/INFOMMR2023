@@ -85,6 +85,13 @@ def refine_mesh(mesh, target_faces_min=1000, target_faces_max=50000):
     return mesh
 
 
+def resample(mesh, target_faces):
+    while len(mesh.faces) < target_faces:
+        mesh = mesh.subdivide()
+    mesh = mesh.simplify_quadratic_decimation(target_faces)
+    return mesh
+
+
 def normalize_single_features(mesh_features):
     feature_values = [descriptor.get_single_features() for descriptor in mesh_features]
 
@@ -104,14 +111,11 @@ def euclidean_distance(x1, x2):
     return np.sqrt(np.sum((x1 - x2) ** 2))
 
 
-from scipy.stats import wasserstein_distance
-
-
 def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
     distances = np.zeros(len(all_meshes))
     for i in range(len(all_meshes)):
-        x1 = np.array(current_mesh.get_normalized_single_features())
-        x2 = np.array(all_meshes[i][6].get_normalized_single_features())
+        x1 = np.array(current_mesh.get_normalized_features())
+        x2 = np.array(all_meshes[i][6].get_normalized_features())
         distances[i] = euclidean_distance(x1, x2)
     sorted_distances = np.argsort(distances)[:num_neighbors]
     best_matching_shapes = [all_meshes[k] for k in sorted_distances]
@@ -151,6 +155,8 @@ class BasicScene(Scene):
     show_rest_of_ui = False
     neighbor_count = 1
     best_matching_shapes = []
+    show_bb = False
+    show_axis = False
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -184,6 +190,7 @@ class BasicScene(Scene):
         self.current_class = self.average_model["Shape Class"]
         self.current_class_id = list(self.models.keys()).index(self.current_class)
         self.current_model_id = self.models[self.current_class].index(self.current_model_name)
+        self.average_model = self.current_model
         self.lines = Lines(self.app, line_width=1)
 
         # Resampling poorly sampled outliers
@@ -217,6 +224,11 @@ class BasicScene(Scene):
             path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', model_class, name)
             mesh = trimesh.load_mesh(path)
 
+            # Step 1: Resample
+            mesh.process()
+            mesh.remove_duplicate_faces()
+            mesh = resample(mesh, 5000)
+
             # Step 2: Translation
             barycenter = mesh.centroid
             mesh.apply_translation(-barycenter)
@@ -229,9 +241,9 @@ class BasicScene(Scene):
             medium = eig_vectors[:, sorted_indices[1]]
             minor = np.cross(major, medium)
 
-            eigenvectors = np.array([major, medium, minor])
+            dot_product = np.dot(mesh.vertices, np.array([major, medium, minor]))
 
-            mesh = trimesh.Trimesh(np.dot(mesh.vertices - mesh.centroid, eigenvectors), mesh.faces)
+            mesh = trimesh.Trimesh(dot_product, mesh.faces)
 
             # Step 4: Orientation
             f = np.sum(np.sign(mesh.triangles_center) * (np.square(mesh.triangles_center)))
@@ -280,24 +292,6 @@ class BasicScene(Scene):
         imgui.text("Click and drag left/right mouse button to rotate camera.")
         imgui.text("Click and drag middle mouse button to pan camera.")
 
-        # imgui.text("Select a class")
-        # _, selected_class = imgui.combo("##class_combo", self.current_class_id, list(self.models.keys()))
-        # if selected_class != -1 and selected_class != self.current_class_id:
-        #     self.current_class_id = selected_class
-        #     self.current_model_id = 0
-        #     self.current_model_name = list(self.models.items())[self.current_class_id][1][0]
-        #     self.current_model = Model(self.app, self.current_model_name)
-        #     self.current_class = list(self.models.items())[self.current_class_id][0]
-        #
-        # imgui.text("Select a model")
-        # _, selected_model = imgui.combo("##model_combo", self.current_model_id,
-        #                                 list(self.models.items())[self.current_class_id][1][:])
-        # if selected_model != -1 and selected_model != self.current_model_id:
-        #     self.current_model_id = selected_model
-        #     self.current_model_name = list(self.models.items())[self.current_class_id][1][self.current_model_id]
-        #     self.current_model = Model(self.app, self.current_model_name)
-        #     self.current_class = list(self.models.items())[self.current_class_id][0]
-
         # Begin the combo
         shading_modes = ["flat", "smooth"]
         clicked, current_item = imgui.combo("Shading Mode", self.current_shading_mode, shading_modes)
@@ -306,6 +300,10 @@ class BasicScene(Scene):
             self.current_model.set_shading(shading_modes[self.current_shading_mode])
 
         clicked, self.show_wireframe = imgui.checkbox("Show Wireframe", self.show_wireframe)
+        clicked, self.show_bb = imgui.checkbox("Show Bounding Boxes", self.show_bb)
+        clicked, self.show_axis = imgui.checkbox("Show Axes", self.show_axis)
+
+
         clicked, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled", self.show_poorly_sampled)
 
         if self.show_poorly_sampled:
@@ -389,8 +387,8 @@ class BasicScene(Scene):
             self.app.ctx.wireframe = True
 
             if not self.show_poorly_sampled and not self.show_normalized:
-                self.current_model.color = [0, 0, 0]
-                self.current_model.draw(
+                self.average_model.color = [0, 0, 0]
+                self.average_model.draw(
                     self.app.camera.projection.matrix,
                     self.app.camera.matrix,
                     self.light
@@ -433,8 +431,8 @@ class BasicScene(Scene):
         self.app.ctx.wireframe = False
 
         if not self.show_poorly_sampled and not self.show_normalized:
-            self.current_model.color = [1, 1, 1]
-            self.current_model.draw(
+            self.average_model.color = [1, 1, 1]
+            self.average_model.draw(
                 self.app.camera.projection.matrix,
                 self.app.camera.matrix,
                 self.light
@@ -448,6 +446,7 @@ class BasicScene(Scene):
                 self.app.camera.matrix,
                 self.light
             )
+
             self.model_bb = sample[1]
             self.current_model = model
             self.model_basis = sample[3] if self.move_axes_to_barycenter else sample[2]
@@ -465,6 +464,15 @@ class BasicScene(Scene):
             self.current_model = model
             self.model_basis = sample[3] if self.move_axes_to_barycenter else sample[2]
             model.translate(0, 0)
+
+            # if not self.show_wireframe:
+            #     model.color = [0, 0, 0]
+            #     model.draw(
+            #         self.app.camera.projection.matrix,
+            #         self.app.camera.matrix,
+            #         self.light,
+            #         True
+            #     )
 
             translation = 2
             for match in self.best_matching_shapes:
@@ -484,26 +492,30 @@ class BasicScene(Scene):
                 model_bb = match[1]
                 model_basis = match[3] if self.move_axes_to_barycenter else match[2]
 
-                self.lines.update(model_bb)
-                self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
-                                model.get_model_matrix())
-                self.lines.color = [0, 0, 1, 1]
-                self.lines.update(model_basis)
-                self.app.ctx.depth_func = '1'  # ALWAYS
-                self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
-                                model.get_model_matrix())
-                self.app.ctx.depth_func = '<'  # LESS
-                self.lines.color = [1, 0, 0, 1]
+                if self.show_bb:
+                    self.lines.update(model_bb)
+                    self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
+                                    model.get_model_matrix())
+                    self.lines.color = [0, 0, 1, 1]
+                if self.show_axis:
+                    self.lines.update(model_basis)
+                    self.app.ctx.depth_func = '1'  # ALWAYS
+                    self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
+                                    model.get_model_matrix())
+                    self.app.ctx.depth_func = '<'  # LESS
+                    self.lines.color = [1, 0, 0, 1]
 
-        self.lines.update(self.model_bb)
-        self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
-                        self.current_model.get_model_matrix())
-        self.lines.color = [0, 0, 1, 1]
-        self.lines.update(self.model_basis)
-        self.app.ctx.depth_func = '1'  # ALWAYS
-        self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
-                        self.current_model.get_model_matrix())
-        self.app.ctx.depth_func = '<'  # LESS
-        self.lines.color = [1, 0, 0, 1]
+        if self.show_bb:
+            self.lines.update(self.model_bb)
+            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
+                            self.current_model.get_model_matrix())
+            self.lines.color = [0, 0, 1, 1]
+        if self.show_axis:
+            self.lines.update(self.model_basis)
+            self.app.ctx.depth_func = '1'  # ALWAYS
+            self.lines.draw(self.app.camera.projection.matrix, self.app.camera.matrix,
+                            self.current_model.get_model_matrix())
+            self.app.ctx.depth_func = '<'  # LESS
+            self.lines.color = [1, 0, 0, 1]
 
         self.render_ui()

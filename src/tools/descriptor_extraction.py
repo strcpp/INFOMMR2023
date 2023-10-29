@@ -27,6 +27,11 @@ class ShapeDescriptors:
         self.eccentricity_normalized = self.eccentricity
         self.sample_size = 1000
         self.bin_size = 10
+        self.A3 = self.compute_A3(self.sample_size)
+        self.D1 = self.compute_D1(self.sample_size)
+        self.D2 = self.compute_D2(self.sample_size)
+        self.D3 = self.compute_D3(self.sample_size)
+        self.D4 = self.compute_D4(self.sample_size)
 
     def compute_compactness(self):
         V = self.mesh.volume
@@ -55,7 +60,7 @@ class ShapeDescriptors:
         eigenvalues = np.linalg.eigvals(covariance_matrix)
         return max(eigenvalues) / min(eigenvalues)
 
-    def compute_A3(self, num_samples, bins):
+    def compute_A3(self, num_samples):
         angles = []
         vertices = self.mesh.vertices
         for _ in range(num_samples):
@@ -65,16 +70,18 @@ class ShapeDescriptors:
             cosine_angle = np.dot(BA, BC) / (np.linalg.norm(BA) * np.linalg.norm(BC))
             angle = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
             angles.append(angle)
-        histogram, bin_edges = np.histogram(angles, bins=bins, range=(0, np.pi))
-        return histogram
+        self.A3 = angles
+        return angles
 
     def save_A3_histogram_image(self):
-        self.a3 = self.compute_A3(self.sample_size, self.bin_size)
+        a3 = self.compute_A3(self.sample_size)
+
+        histogram, bin_edges = np.histogram(a3, bins=self.bin_size, range=(0, np.pi))
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        bin_edges = np.linspace(0, np.pi, len(self.a3) + 1)
+        bin_edges = np.linspace(0, np.pi, len(histogram) + 1)
         bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
-        ax.bar(bin_centers, self.a3, width=np.pi / len(self.a3), align='center', edgecolor='black')
+        ax.bar(bin_centers, histogram, width=np.pi / len(histogram), align='center', edgecolor='black')
         ax.set_xlabel('Angle (radians)')
         ax.set_ylabel('Frequency')
         ax.set_title('Angle between 3 random vertices')
@@ -103,7 +110,7 @@ class ShapeDescriptors:
             # Compute the distance
             distance = np.linalg.norm(vertex - barycenter)
             distances.append(distance)
-
+        self.D1 = distances
         return distances
 
     def save_D1_histogram_image(self):
@@ -137,7 +144,7 @@ class ShapeDescriptors:
             # Compute the distance
             distance = np.linalg.norm(vertex1 - vertex2)
             distances.append(distance)
-
+        self.D2 = distances
         return distances
 
     def save_D2_histogram_image(self):
@@ -179,7 +186,7 @@ class ShapeDescriptors:
             # Compute the area using Heron's formula
             area = np.sqrt(s * (s - a) * (s - b) * (s - c))
             areas.append(np.sqrt(area))
-
+        self.D3 = areas
         return areas
 
     def save_D3_histogram_image(self):
@@ -217,7 +224,7 @@ class ShapeDescriptors:
             volume = np.abs(np.dot(AB, np.cross(AC, AD))) / 6
 
             volumes.append(np.cbrt(volume))
-
+        self.D4 = volumes
         return volumes
 
     def save_D4_histogram_image(self):
@@ -249,13 +256,19 @@ class ShapeDescriptors:
                 self.convexity,
                 self.eccentricity]
 
-    def get_normalized_single_features(self):
+    def get_normalized_features(self):
         return [self.surface_area_normalized,
                 self.compactness_normalized,
                 self.rectangularity_normalized,
                 self.diameter_normalized,
                 self.convexity_normalized,
-                self.eccentricity_normalized]
+                self.eccentricity_normalized,
+                self.A3[0],
+                self.D1[0],
+                self.D2[0],
+                self.D3[0],
+                self.D4[0]
+                ]
 
     def normalize_single_features(self, updated_features):
         self.surface_area_normalized = updated_features[0]
