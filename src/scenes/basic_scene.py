@@ -14,6 +14,8 @@ import numpy as np
 from tools.descriptor_extraction import *
 from numba import njit
 
+THRESHOLD = 100
+
 
 def get_bb_lines(bounding_box):
     x0, y0, z0 = bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]
@@ -86,9 +88,15 @@ def refine_mesh(mesh, target_faces_min=1000, target_faces_max=50000):
 
 
 def resample(mesh, target_faces):
-    while len(mesh.faces) < target_faces:
-        mesh = mesh.subdivide()
-    mesh = mesh.simplify_quadratic_decimation(target_faces)
+    while len(mesh.vertices) > target_faces + THRESHOLD or len(mesh.vertices) < target_faces - THRESHOLD:
+        # If number of vertices is too high, simplify
+        if len(mesh.vertices) > target_faces + THRESHOLD:
+            new_face_count = target_faces * (len(mesh.faces) / len(mesh.vertices))
+            mesh = mesh.simplify_quadratic_decimation(new_face_count)
+
+        # If number of vertices is too low, subdivide
+        if len(mesh.vertices) < target_faces - THRESHOLD:
+            mesh = trimesh.Trimesh(*trimesh.remesh.subdivide(mesh.vertices, mesh.faces))
     return mesh
 
 
@@ -143,6 +151,7 @@ class BasicScene(Scene):
     average_model = None
     refined_meshes = {}
     poorly_sampled = []
+    refined = []
     selected_poorly_sampled = 0
     lines = None
     model_bb = []
@@ -157,6 +166,7 @@ class BasicScene(Scene):
     best_matching_shapes = []
     show_bb = False
     show_axis = False
+    target_faces = 0
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -190,8 +200,13 @@ class BasicScene(Scene):
         self.current_class = self.average_model["Shape Class"]
         self.current_class_id = list(self.models.keys()).index(self.current_class)
         self.current_model_id = self.models[self.current_class].index(self.current_model_name)
-        self.average_model = self.current_model
         self.lines = Lines(self.app, line_width=1)
+
+        self.average_model = self.current_model
+        path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', self.current_class,
+                            self.current_model_name)
+        mesh = trimesh.load_mesh(path)
+        self.target_faces = len(mesh.vertices)
 
         # Resampling poorly sampled outliers
         for i, outlier in tqdm(poorly_sampled.iterrows(), desc="Resampling outliers"):
@@ -204,13 +219,18 @@ class BasicScene(Scene):
             refined_mesh = refine_mesh(mesh)
             self.refined_meshes[name] = (name, outlier['Shape Class'], refined_mesh)
 
-            self.poorly_sampled.append(
+            self.refined.append(
                 (Model(self.app, name, refined_mesh), get_bb_lines(bounding_box),
                  get_basis_lines(bounding_box, None),
                  get_basis_lines(None, refined_mesh.centroid), name, model_class))
 
+            self.poorly_sampled.append(
+                (Model(self.app, name, mesh), get_bb_lines(bounding_box),
+                 get_basis_lines(bounding_box, None),
+                 get_basis_lines(None, mesh.centroid), name, model_class))
+
         # Normalizing all shapes after resampling
-        self.normalized = self.poorly_sampled.copy()
+        self.normalized = self.refined.copy()
         for model_class, models in self.models.items():
             for model_name in models:
                 if model_name not in self.refined_meshes:
@@ -227,7 +247,7 @@ class BasicScene(Scene):
             # Step 1: Resample
             mesh.process()
             mesh.remove_duplicate_faces()
-            mesh = resample(mesh, 5000)
+            mesh = resample(mesh, self.target_faces)
 
             # Step 2: Translation
             barycenter = mesh.centroid
@@ -403,6 +423,26 @@ class BasicScene(Scene):
                     self.light
                 )
 
+                sample = self.refined[self.selected_poorly_sampled]
+                model = sample[0]
+                model.color = [0, 0, 0]
+                model.draw(
+                    self.app.camera.projection.matrix,
+                    self.app.camera.matrix,
+                    self.light
+                )
+                bb = sample[1]
+
+                x_coordinates = [point[0][0] for point in bb]
+
+                # Find the minimum and maximum x-coordinates
+                min_x = min(x_coordinates)
+                max_x = max(x_coordinates)
+
+                # Calculate the width
+                width = max_x - min_x
+                model.translate(width + 1, 0)
+
             else:
                 model = self.normalized[self.selected_normalized][0]
                 model.color = [0, 0, 0]
@@ -450,6 +490,26 @@ class BasicScene(Scene):
             self.model_bb = sample[1]
             self.current_model = model
             self.model_basis = sample[3] if self.move_axes_to_barycenter else sample[2]
+
+            sample = self.refined[self.selected_poorly_sampled]
+            model = sample[0]
+            model.color = [1, 1, 1]
+            model.draw(
+                self.app.camera.projection.matrix,
+                self.app.camera.matrix,
+                self.light
+            )
+            bb = sample[1]
+
+            x_coordinates = [point[0][0] for point in bb]
+
+            # Find the minimum and maximum x-coordinates
+            min_x = min(x_coordinates)
+            max_x = max(x_coordinates)
+
+            # Calculate the width
+            width = max_x - min_x
+            model.translate(width + 1, 0)
 
         else:
             sample = self.normalized[self.selected_normalized]

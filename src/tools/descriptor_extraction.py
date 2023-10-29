@@ -257,17 +257,17 @@ class ShapeDescriptors:
                 self.eccentricity]
 
     def get_normalized_features(self):
-        return [self.surface_area_normalized,
-                self.compactness_normalized,
-                self.rectangularity_normalized,
-                self.diameter_normalized,
-                self.convexity_normalized,
-                self.eccentricity_normalized,
-                self.A3[0],
-                self.D1[0],
-                self.D2[0],
-                self.D3[0],
-                self.D4[0]
+        return [self.surface_area_normalized * 0.05,
+                self.compactness_normalized * 0.05,
+                self.rectangularity_normalized * 0.05,
+                self.diameter_normalized * 0.05,
+                self.convexity_normalized * 0.05,
+                self.eccentricity_normalized * 0.05,
+                self.A3[0] * 0.1,
+                self.D1[0] * 0.15,
+                self.D2[0] * 0.15,
+                self.D3[0] * 0.15,
+                self.D4[0] * 0.15
                 ]
 
     def normalize_single_features(self, updated_features):
