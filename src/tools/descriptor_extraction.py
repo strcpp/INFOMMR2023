@@ -13,6 +13,8 @@ class ShapeDescriptors:
         self.mesh = mesh
         self.model_class = model_class
         self.model_name, _ = os.path.splitext(model_name)
+        self.n_vertices = len(mesh.vertices)
+        self.n_faces = len(mesh.faces)
         self.surface_area = mesh.area
         self.surface_area_normalized = self.surface_area
         self.compactness = self.compute_compactness()

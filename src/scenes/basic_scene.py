@@ -127,7 +127,8 @@ def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
         distances[i] = euclidean_distance(x1, x2)
     sorted_distances = np.argsort(distances)[:num_neighbors]
     best_matching_shapes = [all_meshes[k] for k in sorted_distances]
-    return best_matching_shapes
+    best_distances = [distances[k] for k in sorted_distances]
+    return best_matching_shapes, best_distances
 
 
 class BasicScene(Scene):
@@ -137,14 +138,12 @@ class BasicScene(Scene):
     models = {}
     current_model = None
     current_model_name = ""
-    current_model_id = 0
-    current_class_id = 0
     current_class = ""
     light = None
     skybox = None
     grid = None
     current_shading_mode = "flat"
-    show_wireframe = False
+    show_wireframe = True
     selected_class = 0
     selected_model = 0
     models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
@@ -167,6 +166,10 @@ class BasicScene(Scene):
     show_bb = False
     show_axis = False
     target_faces = 0
+    average_vertices = 0
+    average_faces = 0
+    average_model_class = ""
+    distances = []
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -193,20 +196,19 @@ class BasicScene(Scene):
 
         poorly_sampled = all_neighbors[condition]
 
-        self.show_poorly_sampled = True
-        self.show_wireframe = True
         self.current_model_name = self.average_model["Shape Name"]
         self.current_model = Model(self.app, self.current_model_name)
         self.current_class = self.average_model["Shape Class"]
-        self.current_class_id = list(self.models.keys()).index(self.current_class)
-        self.current_model_id = self.models[self.current_class].index(self.current_model_name)
         self.lines = Lines(self.app, line_width=1)
 
         self.average_model = self.current_model
         path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', self.current_class,
                             self.current_model_name)
         mesh = trimesh.load_mesh(path)
+        self.average_vertices = len(mesh.vertices)
+        self.average_faces = len(mesh.faces)
         self.target_faces = len(mesh.vertices)
+        self.average_model_class = self.current_class
 
         # Resampling poorly sampled outliers
         for i, outlier in tqdm(poorly_sampled.iterrows(), desc="Resampling outliers"):
@@ -245,29 +247,29 @@ class BasicScene(Scene):
             mesh = trimesh.load_mesh(path)
 
             # Step 1: Resample
-            mesh.process()
-            mesh.remove_duplicate_faces()
-            mesh = resample(mesh, self.target_faces)
-
-            # Step 2: Translation
-            barycenter = mesh.centroid
-            mesh.apply_translation(-barycenter)
-
-            # Step 3: Pose (alignment)
-            covariance_matrix = np.cov(np.transpose(mesh.vertices))
-            eig_values, eig_vectors = np.linalg.eig(covariance_matrix)
-            sorted_indices = np.argsort(eig_values)[::-1]
-            major = eig_vectors[:, sorted_indices[0]]
-            medium = eig_vectors[:, sorted_indices[1]]
-            minor = np.cross(major, medium)
-
-            dot_product = np.dot(mesh.vertices, np.array([major, medium, minor]))
-
-            mesh = trimesh.Trimesh(dot_product, mesh.faces)
-
-            # Step 4: Orientation
-            f = np.sum(np.sign(mesh.triangles_center) * (np.square(mesh.triangles_center)))
-            mesh = trimesh.Trimesh((mesh.vertices * np.sign(f)), mesh.faces)
+            # mesh.process()
+            # mesh.remove_duplicate_faces()
+            # mesh = resample(mesh, self.target_faces)
+            #
+            # # Step 2: Translation
+            # barycenter = mesh.centroid
+            # mesh.apply_translation(-barycenter)
+            #
+            # # Step 3: Pose (alignment)
+            # covariance_matrix = np.cov(np.transpose(mesh.vertices))
+            # eig_values, eig_vectors = np.linalg.eig(covariance_matrix)
+            # sorted_indices = np.argsort(eig_values)[::-1]
+            # major = eig_vectors[:, sorted_indices[0]]
+            # medium = eig_vectors[:, sorted_indices[1]]
+            # minor = np.cross(major, medium)
+            #
+            # dot_product = np.dot(mesh.vertices, np.array([major, medium, minor]))
+            #
+            # mesh = trimesh.Trimesh(dot_product, mesh.faces)
+            #
+            # # Step 4: Orientation
+            # f = np.sum(np.sign(mesh.triangles_center) * (np.square(mesh.triangles_center)))
+            # mesh = trimesh.Trimesh((mesh.vertices * np.sign(f)), mesh.faces)
 
             # Step 5: Size
             max_dimension = max(mesh.extents)
@@ -306,6 +308,8 @@ class BasicScene(Scene):
         # Change the style of the entire ImGui interface
         imgui.style_colors_classic()
 
+        imgui.set_next_window_position(0, 20, imgui.ONCE)
+
         # Add an ImGui window
         imgui.begin("Settings", flags=imgui.WINDOW_ALWAYS_AUTO_RESIZE)
 
@@ -322,7 +326,6 @@ class BasicScene(Scene):
         clicked, self.show_wireframe = imgui.checkbox("Show Wireframe", self.show_wireframe)
         clicked, self.show_bb = imgui.checkbox("Show Bounding Boxes", self.show_bb)
         clicked, self.show_axis = imgui.checkbox("Show Axes", self.show_axis)
-
 
         clicked, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled", self.show_poorly_sampled)
 
@@ -355,28 +358,65 @@ class BasicScene(Scene):
             save_data(self.refined_meshes)
             pass
 
-        if self.show_normalized:
-            descriptors = self.normalized[self.selected_normalized][6]
+        imgui.set_next_window_position(410, 20, imgui.ONCE)
+        if imgui.begin("Info", True):
+            if self.show_poorly_sampled:
+                imgui.columns(2, None, True)
+                imgui.set_column_width(-1, 200)
+                sample = self.poorly_sampled[self.selected_poorly_sampled]
+                imgui.text(f"Model Class: {sample[5]}")
+                imgui.text(f"Number of Vertices: {len(sample[0].mesh.vertices)}")
+                imgui.text(f"Number of Faces: {len(sample[0].mesh.faces)}")
+                imgui.text("")
+                imgui.next_column()
+                imgui.set_column_width(-1, 180)
+                sample = self.refined[self.selected_poorly_sampled]
+                imgui.text(f"Model Class: {sample[5]}")
+                imgui.text(f"Number of Vertices: {len(sample[0].mesh.vertices)}")
+                imgui.text(f"Number of Faces: {len(sample[0].mesh.faces)}")
+            elif self.show_normalized:
+                imgui.columns(4, None, True)
+                aligned_shapes = [self.normalized[self.selected_normalized]]
+                aligned_distances = [0]
+                for i in range(0, len(self.best_matching_shapes), 2):
+                    try:
+                        shape2 = self.best_matching_shapes[i + 1]
+                        aligned_shapes.insert(0, shape2)
+                        aligned_distances.insert(0, self.distances[i + 1])
+                    except IndexError:
+                        pass
+                    shape1 = self.best_matching_shapes[i]
+                    aligned_shapes.insert(len(aligned_shapes), shape1)
+                    aligned_distances.insert(len(aligned_shapes), self.distances[i])
 
-            imgui.set_next_window_position(self.app.window_size[0] - 300, 0, imgui.ONCE)
-            # imgui.set_next_window_size(300, imgui.CONTENT_SIZE_FIT)
+                for i, shape in enumerate(aligned_shapes):
+                    imgui.set_column_width(-1, 230)
+                    descriptors = shape[6]
+                    imgui.text(f"Model Class: {shape[5]}")
+                    imgui.text(f"Distance: {aligned_distances[i]:.3f}")
+                    imgui.text(f"Number of Vertices: {descriptors.n_vertices}")
+                    imgui.text(f"Number of Faces: {descriptors.n_faces}")
+                    imgui.text("{}: {:.2f}".format("Surface area", descriptors.surface_area))
+                    imgui.text("{}: {:.2f}".format("Compactness", descriptors.compactness))
+                    imgui.text("{}: {:.2f}".format("Rectangularity", descriptors.rectangularity))
+                    imgui.text("{}: {:.2f}".format("Diameter", descriptors.diameter))
+                    imgui.text("{}: {:.2f}".format("Convexity", descriptors.convexity))
+                    imgui.text("{}: {:.2f}".format("Eccentricity", descriptors.eccentricity))
 
-            if imgui.begin("Descriptors", True):
-                imgui.text("{}: {:.2f}".format("Surface area", descriptors.surface_area))
-                imgui.text("{}: {:.2f}".format("Compactness", descriptors.compactness))
-                imgui.text("{}: {:.2f}".format("Rectangularity", descriptors.rectangularity))
-                imgui.text("{}: {:.2f}".format("Diameter", descriptors.diameter))
-                imgui.text("{}: {:.2f}".format("Convexity", descriptors.convexity))
-                imgui.text("{}: {:.2f}".format("Eccentricity", descriptors.eccentricity))
+                    if imgui.button("Save Distributions"):
+                        descriptors.save_A3_histogram_image()
+                        descriptors.save_D1_histogram_image()
+                        descriptors.save_D2_histogram_image()
+                        descriptors.save_D3_histogram_image()
+                        descriptors.save_D4_histogram_image()
+                    imgui.text("")
 
-                if imgui.button("Save Distributions"):
-                    descriptors.save_A3_histogram_image()
-                    descriptors.save_D1_histogram_image()
-                    descriptors.save_D2_histogram_image()
-                    descriptors.save_D3_histogram_image()
-                    descriptors.save_D4_histogram_image()
+                    imgui.next_column()
+            else:
+                imgui.text(f"Model Class: {self.average_model_class }")
+                imgui.text(f"Number of Vertices: {self.average_vertices}")
+                imgui.text(f"Number of Faces: {self.average_faces}")
 
-            # End the window
             imgui.end()
 
         if self.show_normalized:
@@ -388,7 +428,7 @@ class BasicScene(Scene):
             _, self.neighbor_count = imgui.input_int("Number of Returned Shapes", self.neighbor_count)
 
             if imgui.button("Get Best-Matching Shapes"):
-                self.best_matching_shapes = get_best_matching_shapes(
+                self.best_matching_shapes, self.distances = get_best_matching_shapes(
                     self.normalized[self.selected_normalized][6],
                     [model for model in self.normalized if model[4] != self.normalized[self.selected_normalized][4]],
                     self.neighbor_count)
@@ -524,15 +564,6 @@ class BasicScene(Scene):
             self.current_model = model
             self.model_basis = sample[3] if self.move_axes_to_barycenter else sample[2]
             model.translate(0, 0)
-
-            # if not self.show_wireframe:
-            #     model.color = [0, 0, 0]
-            #     model.draw(
-            #         self.app.camera.projection.matrix,
-            #         self.app.camera.matrix,
-            #         self.light,
-            #         True
-            #     )
 
             translation = 2
             for match in self.best_matching_shapes:

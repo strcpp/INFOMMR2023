@@ -11,6 +11,7 @@ from typing import Any, Tuple
 from moderngl_window.text.bitmapped import TextWriter2D
 import json
 
+
 class App(glw.WindowConfig):
     """
     Main glw App.
@@ -83,7 +84,6 @@ class App(glw.WindowConfig):
         self.writer.draw(self.fps_dims, size=20)
         # print(self.camera.position)
         # print(self.camera.pitch, " ", self.camera.yaw)
-
 
     def key_event(self, key: int, action: str, modifiers: glw.context.base.keys.KeyModifiers) -> None:
         """
