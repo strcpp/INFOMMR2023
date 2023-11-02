@@ -13,6 +13,7 @@ import trimesh
 import numpy as np
 from tools.descriptor_extraction import *
 from numba import njit
+import pynndescent
 
 THRESHOLD = 100
 
@@ -170,6 +171,7 @@ class BasicScene(Scene):
     average_faces = 0
     average_model_class = ""
     distances = []
+    index = None
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -201,6 +203,7 @@ class BasicScene(Scene):
         self.current_class = self.average_model["Shape Class"]
         self.lines = Lines(self.app, line_width=1)
 
+        # Average model mesh and info
         self.average_model = self.current_model
         path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', self.current_class,
                             self.current_model_name)
@@ -247,29 +250,29 @@ class BasicScene(Scene):
             mesh = trimesh.load_mesh(path)
 
             # Step 1: Resample
-            # mesh.process()
-            # mesh.remove_duplicate_faces()
-            # mesh = resample(mesh, self.target_faces)
-            #
-            # # Step 2: Translation
-            # barycenter = mesh.centroid
-            # mesh.apply_translation(-barycenter)
-            #
-            # # Step 3: Pose (alignment)
-            # covariance_matrix = np.cov(np.transpose(mesh.vertices))
-            # eig_values, eig_vectors = np.linalg.eig(covariance_matrix)
-            # sorted_indices = np.argsort(eig_values)[::-1]
-            # major = eig_vectors[:, sorted_indices[0]]
-            # medium = eig_vectors[:, sorted_indices[1]]
-            # minor = np.cross(major, medium)
-            #
-            # dot_product = np.dot(mesh.vertices, np.array([major, medium, minor]))
-            #
-            # mesh = trimesh.Trimesh(dot_product, mesh.faces)
-            #
-            # # Step 4: Orientation
-            # f = np.sum(np.sign(mesh.triangles_center) * (np.square(mesh.triangles_center)))
-            # mesh = trimesh.Trimesh((mesh.vertices * np.sign(f)), mesh.faces)
+            mesh.process()
+            mesh.remove_duplicate_faces()
+            mesh = resample(mesh, self.target_faces)
+
+            # Step 2: Translation
+            barycenter = mesh.centroid
+            mesh.apply_translation(-barycenter)
+
+            # Step 3: Pose (alignment)
+            covariance_matrix = np.cov(np.transpose(mesh.vertices))
+            eig_values, eig_vectors = np.linalg.eig(covariance_matrix)
+            sorted_indices = np.argsort(eig_values)[::-1]
+            major = eig_vectors[:, sorted_indices[0]]
+            medium = eig_vectors[:, sorted_indices[1]]
+            minor = np.cross(major, medium)
+
+            dot_product = np.dot(mesh.vertices, np.array([major, medium, minor]))
+
+            mesh = trimesh.Trimesh(dot_product, mesh.faces)
+
+            # Step 4: Orientation
+            f = np.sum(np.sign(mesh.triangles_center) * (np.square(mesh.triangles_center)))
+            mesh = trimesh.Trimesh((mesh.vertices * np.sign(f)), mesh.faces)
 
             # Step 5: Size
             max_dimension = max(mesh.extents)
@@ -281,6 +284,18 @@ class BasicScene(Scene):
             self.normalized[i] = (
                 Model(self.app, name, mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box, None),
                 get_basis_lines(None, mesh.centroid), name, model_class, descriptors)
+
+        # Setting up ANN query
+        query_shapes = np.array([shape[6].get_normalized_features() for shape in self.normalized])
+
+        # Setting all NaN features to 0
+        query_shapes = np.nan_to_num(query_shapes, nan=0)
+
+        # # Removing samples with NaN features. We don't
+        # query_shapes = query_shapes[~np.any(np.isnan(query_shapes), axis=1)]
+
+        self.index = pynndescent.NNDescent(query_shapes, n_jobs=-1, random_state=42)
+        self.index.prepare()
 
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
@@ -413,7 +428,7 @@ class BasicScene(Scene):
 
                     imgui.next_column()
             else:
-                imgui.text(f"Model Class: {self.average_model_class }")
+                imgui.text(f"Model Class: {self.average_model_class}")
                 imgui.text(f"Number of Vertices: {self.average_vertices}")
                 imgui.text(f"Number of Faces: {self.average_faces}")
 
@@ -427,11 +442,19 @@ class BasicScene(Scene):
         if self.show_rest_of_ui:
             _, self.neighbor_count = imgui.input_int("Number of Returned Shapes", self.neighbor_count)
 
-            if imgui.button("Get Best-Matching Shapes"):
+            if imgui.button("Get Best-Matching Shapes (Step 4)"):
                 self.best_matching_shapes, self.distances = get_best_matching_shapes(
                     self.normalized[self.selected_normalized][6],
-                    [model for model in self.normalized if model[4] != self.normalized[self.selected_normalized][4]],
+                    [shape for shape in self.normalized if shape[4] != self.normalized[self.selected_normalized][4]],
                     self.neighbor_count)
+            if imgui.button("Get Best-Matching Shapes (Step 5: ANN)"):
+                neighbor_indexes, distances = self.index.query(
+                    np.array([self.normalized[self.selected_normalized][6].get_normalized_features()]),
+                    k=self.neighbor_count
+                )
+
+                self.distances = distances.flatten().tolist()
+                self.best_matching_shapes = [self.normalized[k] for k in neighbor_indexes.flatten().tolist()]
 
         imgui.end()
         imgui.render()

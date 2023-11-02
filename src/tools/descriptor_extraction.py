@@ -7,7 +7,7 @@ import os
 
 output_dir = "src/tools/outputs/histograms/descriptors"
 
-
+np.random.seed(42)
 class ShapeDescriptors:
     def __init__(self, mesh, model_class, model_name):
         self.mesh = mesh
@@ -27,7 +27,7 @@ class ShapeDescriptors:
         self.convexity_normalized = self.convexity
         self.eccentricity = self.compute_eccentricity()
         self.eccentricity_normalized = self.eccentricity
-        self.sample_size = 1000
+        self.sample_size = 10
         self.bin_size = 10
         self.A3 = self.compute_A3(self.sample_size)
         self.D1 = self.compute_D1(self.sample_size)
@@ -259,18 +259,22 @@ class ShapeDescriptors:
                 self.eccentricity]
 
     def get_normalized_features(self):
-        return [self.surface_area_normalized * 0.05,
+
+        return_list = [self.surface_area_normalized * 0.05,
                 self.compactness_normalized * 0.05,
                 self.rectangularity_normalized * 0.05,
                 self.diameter_normalized * 0.05,
                 self.convexity_normalized * 0.05,
                 self.eccentricity_normalized * 0.05,
-                self.A3[0] * 0.1,
-                self.D1[0] * 0.15,
-                self.D2[0] * 0.15,
-                self.D3[0] * 0.15,
-                self.D4[0] * 0.15
                 ]
+
+        return_list.extend([x * 0.1 for x in self.A3])
+        return_list.extend([x * 0.15 for x in self.D1])
+        return_list.extend([x * 0.15 for x in self.D2])
+        return_list.extend([x * 0.15 for x in self.D3])
+        return_list.extend([x * 0.15 for x in self.D4])
+
+        return return_list
 
     def normalize_single_features(self, updated_features):
         self.surface_area_normalized = updated_features[0]
