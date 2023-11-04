@@ -1,13 +1,14 @@
 import numpy as np
 from numba import njit
-from PIL import Image
 import matplotlib.pyplot as plt
-import io
 import os
 
-output_dir = "src/tools/outputs/histograms/descriptors"
+output_dir1 = "tools/outputs/histograms/descriptors"
+output_dir2 = "src/tools/outputs/histograms/descriptors"
 
 np.random.seed(42)
+
+
 class ShapeDescriptors:
     def __init__(self, mesh, model_class, model_name):
         self.mesh = mesh
@@ -27,7 +28,7 @@ class ShapeDescriptors:
         self.convexity_normalized = self.convexity
         self.eccentricity = self.compute_eccentricity()
         self.eccentricity_normalized = self.eccentricity
-        self.sample_size = 10
+        self.sample_size = 15
         self.bin_size = 10
         self.A3 = self.compute_A3(self.sample_size)
         self.D1 = self.compute_D1(self.sample_size)
@@ -91,13 +92,13 @@ class ShapeDescriptors:
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
-        # Ensure the directory exists
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
         # Save the figure directly to the desired path
         filename = f"A3_{self.model_class}_{self.model_name}.png"
-        output_path = os.path.join(output_dir, filename)
+
+        try:
+            output_path = os.path.join(output_dir1, filename)
+        except FileNotFoundError:
+            output_path = os.path.join(output_dir2, filename)
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
@@ -126,13 +127,12 @@ class ShapeDescriptors:
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
-        # Ensure the directory exists
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
         # Save the figure directly to the desired path
         filename = f"D1_{self.model_class}_{self.model_name}.png"
-        output_path = os.path.join(output_dir, filename)
+        try:
+            output_path = os.path.join(output_dir1, filename)
+        except FileNotFoundError:
+            output_path = os.path.join(output_dir2, filename)
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
@@ -160,13 +160,12 @@ class ShapeDescriptors:
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
-        # Ensure the directory exists
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
         # Save the figure directly to the desired path
         filename = f"D2_{self.model_class}_{self.model_name}.png"
-        output_path = os.path.join(output_dir, filename)
+        try:
+            output_path = os.path.join(output_dir1, filename)
+        except FileNotFoundError:
+            output_path = os.path.join(output_dir2, filename)
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
@@ -202,13 +201,12 @@ class ShapeDescriptors:
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
-        # Ensure the directory exists
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
         # Save the figure directly to the desired path
         filename = f"D3_{self.model_class}_{self.model_name}.png"
-        output_path = os.path.join(output_dir, filename)
+        try:
+            output_path = os.path.join(output_dir1, filename)
+        except FileNotFoundError:
+            output_path = os.path.join(output_dir2, filename)
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
@@ -240,13 +238,12 @@ class ShapeDescriptors:
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
-        # Ensure the directory exists
-        if not os.path.exists(output_dir):
-            os.makedirs(output_dir)
-
         # Save the figure directly to the desired path
         filename = f"D4_{self.model_class}_{self.model_name}.png"
-        output_path = os.path.join(output_dir, filename)
+        try:
+            output_path = os.path.join(output_dir1, filename)
+        except FileNotFoundError:
+            output_path = os.path.join(output_dir2, filename)
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
@@ -261,12 +258,12 @@ class ShapeDescriptors:
     def get_normalized_features(self):
 
         return_list = [self.surface_area_normalized * 0.05,
-                self.compactness_normalized * 0.05,
-                self.rectangularity_normalized * 0.05,
-                self.diameter_normalized * 0.05,
-                self.convexity_normalized * 0.05,
-                self.eccentricity_normalized * 0.05,
-                ]
+                       self.compactness_normalized * 0.05,
+                       self.rectangularity_normalized * 0.05,
+                       self.diameter_normalized * 0.05,
+                       self.convexity_normalized * 0.05,
+                       self.eccentricity_normalized * 0.05,
+                       ]
 
         return_list.extend([x * 0.1 for x in self.A3])
         return_list.extend([x * 0.15 for x in self.D1])

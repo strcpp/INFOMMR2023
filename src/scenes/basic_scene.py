@@ -1,7 +1,7 @@
 from render.model import Model
 from render.skybox import Skybox
 from scenes.scene import Scene
-from pyrr import Vector3, matrix44
+from pyrr import Vector3
 from light import Light
 import imgui
 import os
@@ -12,124 +12,8 @@ from render.lines import Lines
 import trimesh
 import numpy as np
 from tools.descriptor_extraction import *
-from numba import njit
 import pynndescent
-
-THRESHOLD = 100
-
-
-def get_bb_lines(bounding_box):
-    x0, y0, z0 = bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]
-    x1, y1, z1 = bounding_box[1][0], bounding_box[1][1], bounding_box[1][2]
-
-    p000 = (x0, y0, z0)
-    p001 = (x0, y0, z1)
-    p010 = (x0, y1, z0)
-    p011 = (x0, y1, z1)
-    p100 = (x1, y0, z0)
-    p101 = (x1, y0, z1)
-    p110 = (x1, y1, z0)
-    p111 = (x1, y1, z1)
-
-    connections = [
-        (p000, p001), (p000, p010), (p000, p100),
-        (p111, p110), (p111, p101), (p111, p011),
-        (p001, p101), (p001, p011),
-        (p010, p110), (p010, p011),
-        (p100, p101), (p100, p110),
-    ]
-
-    return connections
-
-
-def get_basis_lines(bounding_box, barycenter):
-    # Calculate the model's geometric center
-    if bounding_box is not None:
-        center_x = (bounding_box[0][0] + bounding_box[1][0]) / 2
-        center_y = (bounding_box[0][1] + bounding_box[1][1]) / 2
-        center_z = (bounding_box[0][2] + bounding_box[1][2]) / 2
-    else:
-        center_x, center_y, center_z = barycenter
-
-    center = (center_x, center_y, center_z)
-
-    # Define the offsets for the basis vectors
-    offset = 0.25  # This can be adjusted based on desired length of basis vectors
-
-    # Calculate endpoints of basis vectors centered at the model's origin
-    i_pos = (center_x + offset, center_y, center_z)
-    j_pos = (center_x, center_y + offset, center_z)
-    k_pos = (center_x, center_y, center_z + offset)
-
-    # Define the lines connecting the center to the endpoints of the basis vectors
-    connections = [
-        (center, i_pos),
-        (center, j_pos),
-        (center, k_pos),
-    ]
-
-    return connections
-
-
-def refine_mesh(mesh, target_faces_min=1000, target_faces_max=50000):
-    if len(mesh.faces) == target_faces_min:
-        return mesh
-
-    # Subdivide until target reached
-    while len(mesh.faces) < target_faces_min:
-        mesh = mesh.subdivide()
-
-    # It will probably exceed the target, so decimate it back down
-    if len(mesh.faces) > target_faces_max:
-        mesh = mesh.simplify_quadratic_decimation(target_faces_max)
-    else:
-        mesh = mesh.simplify_quadratic_decimation(target_faces_min)
-
-    return mesh
-
-
-def resample(mesh, target_faces):
-    while len(mesh.vertices) > target_faces + THRESHOLD or len(mesh.vertices) < target_faces - THRESHOLD:
-        # If number of vertices is too high, simplify
-        if len(mesh.vertices) > target_faces + THRESHOLD:
-            new_face_count = target_faces * (len(mesh.faces) / len(mesh.vertices))
-            mesh = mesh.simplify_quadratic_decimation(new_face_count)
-
-        # If number of vertices is too low, subdivide
-        if len(mesh.vertices) < target_faces - THRESHOLD:
-            mesh = trimesh.Trimesh(*trimesh.remesh.subdivide(mesh.vertices, mesh.faces))
-    return mesh
-
-
-def normalize_single_features(mesh_features):
-    feature_values = [descriptor.get_single_features() for descriptor in mesh_features]
-
-    features_array = np.array(feature_values)
-
-    mean = np.mean(features_array, axis=0)
-    std = np.std(features_array, axis=0)
-
-    standardized_features = (features_array - mean) / std
-
-    for i, descriptor in enumerate(mesh_features):
-        descriptor.normalize_single_features(standardized_features[i])
-
-
-@njit
-def euclidean_distance(x1, x2):
-    return np.sqrt(np.sum((x1 - x2) ** 2))
-
-
-def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
-    distances = np.zeros(len(all_meshes))
-    for i in range(len(all_meshes)):
-        x1 = np.array(current_mesh.get_normalized_features())
-        x2 = np.array(all_meshes[i][6].get_normalized_features())
-        distances[i] = euclidean_distance(x1, x2)
-    sorted_distances = np.argsort(distances)[:num_neighbors]
-    best_matching_shapes = [all_meshes[k] for k in sorted_distances]
-    best_distances = [distances[k] for k in sorted_distances]
-    return best_matching_shapes, best_distances
+from scenes.scene_utils import *
 
 
 class BasicScene(Scene):
@@ -161,7 +45,8 @@ class BasicScene(Scene):
     show_normalized = False
     selected_normalized = 0
     move_axes_to_barycenter = False
-    show_rest_of_ui = False
+    show_rest_of_ui_step_5 = False
+    show_rest_of_ui_step_6 = False
     neighbor_count = 1
     best_matching_shapes = []
     show_bb = False
@@ -172,6 +57,12 @@ class BasicScene(Scene):
     average_model_class = ""
     distances = []
     index = None
+    shapes_per_class = None
+    evaluate = False
+    precisions = 0
+    recalls = 0
+    f1_scores = 0
+    selected_evaluation_subject = 0
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -198,12 +89,11 @@ class BasicScene(Scene):
 
         poorly_sampled = all_neighbors[condition]
 
+        # Average model mesh and info
         self.current_model_name = self.average_model["Shape Name"]
         self.current_model = Model(self.app, self.current_model_name)
         self.current_class = self.average_model["Shape Class"]
         self.lines = Lines(self.app, line_width=1)
-
-        # Average model mesh and info
         self.average_model = self.current_model
         path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', self.current_class,
                             self.current_model_name)
@@ -221,7 +111,7 @@ class BasicScene(Scene):
             path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', outlier['Shape Class'],
                                 name)
             mesh = trimesh.load_mesh(path)
-            refined_mesh = refine_mesh(mesh)
+            refined_mesh = resample(mesh, self.target_faces)
             self.refined_meshes[name] = (name, outlier['Shape Class'], refined_mesh)
 
             self.refined.append(
@@ -233,6 +123,9 @@ class BasicScene(Scene):
                 (Model(self.app, name, mesh), get_bb_lines(bounding_box),
                  get_basis_lines(bounding_box, None),
                  get_basis_lines(None, mesh.centroid), name, model_class))
+
+        self.poorly_sampled = sorted(self.poorly_sampled, key=lambda x: x[5])
+        self.refined = sorted(self.refined, key=lambda x: x[5])
 
         # Normalizing all shapes after resampling
         self.normalized = self.refined.copy()
@@ -285,17 +178,21 @@ class BasicScene(Scene):
                 Model(self.app, name, mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box, None),
                 get_basis_lines(None, mesh.centroid), name, model_class, descriptors)
 
+        self.normalized = sorted(self.normalized, key=lambda x: x[5])\
+
+        # Normalizing all single features
+        normalize_single_features([element[6] for element in self.normalized])
+
         # Setting up ANN query
+        print("< Setting up ANN Query...")
         query_shapes = np.array([shape[6].get_normalized_features() for shape in self.normalized])
 
         # Setting all NaN features to 0
         query_shapes = np.nan_to_num(query_shapes, nan=0)
 
-        # # Removing samples with NaN features. We don't
-        # query_shapes = query_shapes[~np.any(np.isnan(query_shapes), axis=1)]
-
         self.index = pynndescent.NNDescent(query_shapes, n_jobs=-1, random_state=42)
         self.index.prepare()
+        print("< Finished setting up ANN Query!")
 
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
@@ -307,12 +204,6 @@ class BasicScene(Scene):
 
         self.model_bb = get_bb_lines(bounding_box)
         self.model_basis = get_basis_lines(bounding_box, None)
-
-    def unload(self) -> None:
-        pass
-
-    def update(self, dt: float) -> None:
-        pass
 
     def render_ui(self) -> None:
         """
@@ -331,7 +222,10 @@ class BasicScene(Scene):
         imgui.text("Click and drag left/right mouse button to rotate camera.")
         imgui.text("Click and drag middle mouse button to pan camera.")
 
-        # Begin the combo
+        # General settings
+        imgui.text("Visualization Settings: ")
+        imgui.spacing()
+        imgui.indent(16)
         shading_modes = ["flat", "smooth"]
         clicked, current_item = imgui.combo("Shading Mode", self.current_shading_mode, shading_modes)
         if clicked:
@@ -342,38 +236,64 @@ class BasicScene(Scene):
         clicked, self.show_bb = imgui.checkbox("Show Bounding Boxes", self.show_bb)
         clicked, self.show_axis = imgui.checkbox("Show Axes", self.show_axis)
 
-        clicked, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled", self.show_poorly_sampled)
+        clicked, self.move_axes_to_barycenter = imgui.checkbox("Move Axes to Barycenter",
+                                                               self.move_axes_to_barycenter)
+
+        # Step 2
+        imgui.unindent(16)
+        imgui.spacing()
+        imgui.separator()
+        imgui.text("Step 2 - Outlier Resampling: ")
+        imgui.spacing()
+        imgui.indent(16)
+
+        clicked, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled Shapes",
+                                                           self.show_poorly_sampled)
 
         if self.show_poorly_sampled:
-            _, self.selected_poorly_sampled = imgui.combo("Poorly Sampled Shapes",
+            imgui.spacing()
+            imgui.indent(16)
+            imgui.text("Select Poorly Sampled Shape:")
+            _, self.selected_poorly_sampled = imgui.combo(" ",
                                                           self.selected_poorly_sampled,
-                                                          [shape[4] for shape in self.poorly_sampled])
+                                                          [f"{shape[4]}({shape[5]}" for shape in self.poorly_sampled])
             self.show_normalized = False
 
-        clicked, self.show_normalized = imgui.checkbox("Show Normalized", self.show_normalized)
+            if imgui.button("Save Refined Statistics"):
+                for model_class, model_name in self.models.items():
+                    for name in model_name:
+                        if name not in self.refined_meshes:
+                            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models',
+                                                model_class,
+                                                name)
+                            self.refined_meshes[name] = (model_class, name, trimesh.load_mesh(path))
+                save_data(self.refined_meshes)
+                pass
+
+        # Step 3
+        imgui.unindent(16)
+        if self.show_poorly_sampled:
+            imgui.unindent(16)
+        imgui.spacing()
+        imgui.separator()
+        imgui.text("Step 3 - Normalization: ")
+        imgui.spacing()
+        imgui.indent(16)
+
+        clicked, self.show_normalized = imgui.checkbox("Show Normalized Shapes", self.show_normalized)
 
         if self.show_normalized:
-            changed, self.selected_normalized = imgui.combo("Normalized Shapes",
+            imgui.text("Select Normalized Shape:")
+            imgui.spacing()
+            imgui.indent(16)
+            changed, self.selected_normalized = imgui.combo(" ",
                                                             self.selected_normalized,
                                                             [f"{shape[4]}({shape[5]})" for shape in self.normalized])
             self.show_poorly_sampled = False
             if changed:
                 self.best_matching_shapes = []
 
-        clicked, self.move_axes_to_barycenter = imgui.checkbox("Move Axes to Barycenter",
-                                                               self.move_axes_to_barycenter)
-
-        if imgui.button("Save Refined Statistics"):
-            for model_class, model_name in self.models.items():
-                for name in model_name:
-                    if name not in self.refined_meshes:
-                        path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', model_class,
-                                            name)
-                        self.refined_meshes[name] = (model_class, name, trimesh.load_mesh(path))
-            save_data(self.refined_meshes)
-            pass
-
-        imgui.set_next_window_position(410, 20, imgui.ONCE)
+        imgui.set_next_window_position(420, 20, imgui.ONCE)
         if imgui.begin("Info", True):
             if self.show_poorly_sampled:
                 imgui.columns(2, None, True)
@@ -434,12 +354,21 @@ class BasicScene(Scene):
 
             imgui.end()
 
+        # Steps 4 and 5
+        imgui.unindent(16)
+        if self.show_normalized or self.selected_poorly_sampled:
+            imgui.unindent(16)
+        imgui.spacing()
+        imgui.separator()
+        imgui.text("Query: ")
+        imgui.spacing()
+        imgui.indent(16)
         if self.show_normalized:
             if imgui.button("Compute Distance to all Shapes"):
-                normalize_single_features([element[6] for element in self.normalized])
-                self.show_rest_of_ui = True
+                self.show_rest_of_ui_step_5 = True
+                self.show_rest_of_ui_step_6 = False
 
-        if self.show_rest_of_ui:
+        if self.show_rest_of_ui_step_5:
             _, self.neighbor_count = imgui.input_int("Number of Returned Shapes", self.neighbor_count)
 
             if imgui.button("Get Best-Matching Shapes (Step 4)"):
@@ -455,6 +384,56 @@ class BasicScene(Scene):
 
                 self.distances = distances.flatten().tolist()
                 self.best_matching_shapes = [self.normalized[k] for k in neighbor_indexes.flatten().tolist()]
+
+        # Step 6
+        imgui.unindent(16)
+        imgui.spacing()
+        imgui.separator()
+        imgui.text("Evaluation: ")
+        imgui.spacing()
+        imgui.indent(16)
+        if imgui.button("Evaluate CBSR System"):
+
+            self.shapes_per_class = calculate_shapes_per_class(self.normalized)
+            self.show_rest_of_ui_step_5 = False
+            self.show_rest_of_ui_step_6 = True
+
+        if self.show_rest_of_ui_step_6:
+            _, self.neighbor_count = imgui.input_int("Number of Returned Shapes", self.neighbor_count)
+
+            if imgui.button("Use Custom Query"):
+                self.precisions, self.recalls, self.f1_scores = evaluate_query(
+                    "Custom", self.normalized, self.neighbor_count, self.shapes_per_class, None
+                )
+                self.evaluate = True
+
+            if imgui.button("Use ANN"):
+                self.precisions, self.recalls, self.f1_scores = evaluate_query(
+                    "ANN", self.normalized, self.neighbor_count, self.shapes_per_class, self.index
+                )
+                self.evaluate = True
+
+            if self.evaluate:
+                imgui.set_next_window_position(0, 600, imgui.ONCE)
+
+                if imgui.begin("Evaluation Results:", True):
+                    if self.selected_evaluation_subject == 0:
+                        evaluation_subject = "Average"
+                    else:
+                        evaluation_subject = list(self.shapes_per_class.keys())[self.selected_evaluation_subject - 1]
+                    imgui.text(f"{evaluation_subject} Query Precision: {self.precisions[evaluation_subject]:.3f}")
+                    imgui.text(f"{evaluation_subject} Query Recall: {self.recalls[evaluation_subject]:.3f}")
+                    imgui.text(f"{evaluation_subject} Query F1 Score: {self.f1_scores[evaluation_subject]:.3f}")
+
+                    imgui.spacing()
+                    imgui.text("Select Evaluation Subject:")
+                    imgui.spacing()
+                    imgui.indent(16)
+                    changed, self.selected_evaluation_subject = imgui.combo("",
+                                                                            self.selected_evaluation_subject,
+                                                                            ["Average"] + [shape_name for shape_name in
+                                                                                           self.shapes_per_class.keys()])
+                imgui.end()
 
         imgui.end()
         imgui.render()

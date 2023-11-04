@@ -5,7 +5,7 @@ import trimesh
 import json
 
 
-def save_data(meshes):
+def save_data(meshes, resample=True):
     base = os.path.dirname(__file__)
     models_path = os.path.join(base, '../../resources/models')
 
@@ -77,7 +77,10 @@ def save_data(meshes):
                                            '3D Bounding Box': bounding_box})
 
     # Path to the CSV file
-    csv_file_path = os.path.join('outputs', 'shape_data_resampled.csv')
+    if resample:
+        csv_file_path = os.path.join('outputs', 'shape_data_resampled.csv')
+    else:
+        csv_file_path = os.path.join('outputs', 'shape_data.csv')
 
     # CSV file headers
     headers = ['Shape Name', 'Shape Class', 'Number of Vertices', 'Number of Faces', 'Type of Faces', '3D Bounding Box']
@@ -96,4 +99,4 @@ def save_data(meshes):
 
 
 if __name__ == '__main__':
-    save_data()
+    save_data(None, False)

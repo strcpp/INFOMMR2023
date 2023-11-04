@@ -12,3 +12,4 @@ scikit-learn
 trimesh
 pywavefront
 open3d
+pynndescent

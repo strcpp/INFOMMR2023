@@ -3,7 +3,9 @@ import matplotlib.pyplot as plt
 import time
 from sklearn.neighbors import NearestNeighbors
 import os
-import numpy as np
+from tqdm import tqdm
+import warnings
+warnings.filterwarnings("ignore", category=RuntimeWarning)
 
 csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
 
@@ -34,16 +36,27 @@ def histogram(df, column_name, class_name, show):
         bin_center = (bins[i] + bins[i + 1]) / 2
         plt.text(bin_center, n[i], f'{int(n[i])}', ha='center', va='bottom')
 
+    if not os.path.exists("outputs/histograms/vertices/All"):
+        os.makedirs("outputs/histograms/vertices/All")
+    if not os.path.exists("outputs/histograms/faces/All"):
+        os.makedirs("outputs/histograms/faces/All")
+
     if "Vertices" in column_name:
         if class_name:
-            plt.savefig(f"outputs/histograms/vertices_{class_name}")
+            path = f"outputs/histograms/vertices/{class_name}"
+            if not os.path.exists(path):
+                os.makedirs(path)
+            plt.savefig(f"outputs/histograms/vertices/{class_name}/vertices_{class_name}")
         else:
-            plt.savefig(f"outputs/histograms/vertices_all")
+            plt.savefig(f"outputs/histograms/vertices/All/all_shapes")
     else:
         if class_name:
-            plt.savefig(f"outputs/histograms/faces_{class_name}")
+            path = f"outputs/histograms/faces/{class_name}"
+            if not os.path.exists(path):
+                os.makedirs(path)
+            plt.savefig(f"outputs/histograms/faces/{class_name}/faces_{class_name}")
         else:
-            plt.savefig(f"outputs/histograms/faces_all")
+            plt.savefig(f"outputs/histograms/faces/All/all_shapes")
 
     if show:
         plt.show()
@@ -100,7 +113,7 @@ def save_histograms(show_histogram):
     unique_shape_classes = df['Shape Class'].unique()
 
     # Create histograms for each shape class
-    for i, shape_class in enumerate(unique_shape_classes):
+    for i, shape_class in tqdm(enumerate(unique_shape_classes), desc="Saving Histograms", leave=False):
         class_df = df[df['Shape Class'] == shape_class]
         histogram(class_df, "Number of Vertices", shape_class, show_histogram)
 
