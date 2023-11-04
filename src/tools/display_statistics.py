@@ -5,11 +5,16 @@ from sklearn.neighbors import NearestNeighbors
 import os
 from tqdm import tqdm
 import warnings
-from tools.descriptor_extraction import *
+
+try:
+    from tools.descriptor_extraction import *
+except ModuleNotFoundError:
+    from descriptor_extraction import *
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
 database_file_path = os.path.join('src', 'tools', 'outputs', 'database.csv')
+
 
 def histogram(df, column_name, class_name, show):
     """
@@ -69,10 +74,14 @@ def return_neighbors():
     :return: Average shapes and all shapes
     """
     try:
-        df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
+        df = pd.read_csv(csv_file_path, delimiter=';')
     except FileNotFoundError:
-        new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
-        df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+        try:
+            new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
+            df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+        except FileNotFoundError:
+            new_path = os.path.join('outputs', 'shape_data.csv')
+            df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
     average_vertices = df['Number of Vertices'].mean()
     average_faces = df['Number of Faces'].mean()
@@ -100,10 +109,14 @@ def save_histograms(show_histogram):
     Displays multiple histograms
     """
     try:
-        df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
+        df = pd.read_csv(csv_file_path, delimiter=';')
     except FileNotFoundError:
-        new_path = os.path.join('outputs', 'shape_data.csv')
-        df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+        try:
+            new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
+            df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+        except FileNotFoundError:
+            new_path = os.path.join('outputs', 'shape_data.csv')
+            df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
     # Display histogram for the number of vertices
     histogram(df, "Number of Vertices", None, show_histogram)
@@ -130,10 +143,14 @@ def save_histograms(show_histogram):
 def return_bounding_box(model_name, mesh):
     if model_name:
         try:
-            df = pd.read_csv(os.path.join(os.getcwd(), csv_file_path), delimiter=';')
+            df = pd.read_csv(csv_file_path, delimiter=';')
         except FileNotFoundError:
-            new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
-            df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+            try:
+                new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
+                df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+            except FileNotFoundError:
+                new_path = os.path.join('outputs', 'shape_data.csv')
+                df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
         shape = df[df['Shape Name'] == model_name]
         bounding_box = shape.iloc[0]['3D Bounding Box']
@@ -152,6 +169,7 @@ def return_bounding_box(model_name, mesh):
                 [bounding_box[3], bounding_box[4], bounding_box[5]]]
 
     return bounding_box
+
 
 def return_shape_descriptor(model_name, mesh):
     model_name = model_name.replace('.obj', '')
@@ -173,7 +191,7 @@ def return_shape_descriptors(all_model_names, all_meshes):
         # If not found, try to read it from the alternative path
         new_path = os.path.join('tools', 'outputs', 'database.csv')
         df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
-    
+
     # Create a dictionary to hold the ShapeDescriptors, with model names as keys
     descriptors_map = {}
 

@@ -1,4 +1,4 @@
-import os 
+import csv
 from tqdm import tqdm
 import trimesh
 from multiprocessing import Pool, cpu_count
@@ -13,6 +13,7 @@ normalized_models_path = os.path.join(os.path.dirname(__file__), '..', '..', 're
 
 THRESHOLD = 100
 
+
 def resample(mesh, target_faces):
     while len(mesh.vertices) > target_faces + THRESHOLD or len(mesh.vertices) < target_faces - THRESHOLD:
         # If number of vertices is too high, simplify
@@ -24,6 +25,7 @@ def resample(mesh, target_faces):
         if len(mesh.vertices) < target_faces - THRESHOLD:
             mesh = trimesh.Trimesh(*trimesh.remesh.subdivide(mesh.vertices, mesh.faces))
     return mesh
+
 
 def process_mesh(args):
     m, target_faces = args  # unpack the tuple here
@@ -62,7 +64,7 @@ def process_mesh(args):
     mesh.apply_scale(scale_factor)
     descriptors = ShapeDescriptors.from_mesh(mesh, model_class, model_name)
 
-    normalized_output_path = os.path.join(normalized_models_path, model_class) 
+    normalized_output_path = os.path.join(normalized_models_path, model_class)
     if not os.path.exists(normalized_output_path):
         os.makedirs(normalized_output_path)
     mesh_path = os.path.join(normalized_output_path, model_name)
@@ -70,9 +72,11 @@ def process_mesh(args):
 
     return descriptors
 
+
 def load_model(path):
     mesh = trimesh.load_mesh(path[0])
-    return (mesh, path[1], path[2])
+    return mesh, path[1], path[2]
+
 
 def main():
     # Store all paths to be processed
@@ -88,19 +92,20 @@ def main():
                 paths_to_load.append((path, model_class, file))
 
     # Use multiprocessing to parallelize the loading
-    with Pool(processes=cpu_count()) as pool:
+    with Pool(processes=cpu_count() - 4) as pool:
         meshes = pool.map(load_model, paths_to_load)
 
-    average_model, _  = return_neighbors()
+    average_model, _ = return_neighbors()
     average_mesh = next((m[0] for m in meshes if m[2] == average_model["Shape Name"]), None)
     target_faces = len(average_mesh.vertices)
 
     # Use multiprocessing to parallelize the processing
     with Pool(processes=cpu_count()) as pool:
-        all_descriptors = list(tqdm(pool.imap_unordered(process_mesh, [(m, target_faces) for m in meshes]), total=len(meshes)))
+        all_descriptors = list(
+            tqdm(pool.imap_unordered(process_mesh, [(m, target_faces) for m in meshes]), total=len(meshes)))
     data_list = []
 
-    for descriptor in all_descriptors:
+    for descriptor in tqdm(all_descriptors, desc="Calculating Descriptors for all Shapes", leave=False):
         data = {
             "Model Class": descriptor.model_class,
             "Model Name": descriptor.model_name,
@@ -119,7 +124,16 @@ def main():
         data_list.append(data)
 
     df = pd.DataFrame(data_list)
-    df.to_csv(database_path, index=False)
+    try:
+        df.to_csv(database_path, index=False)
+    except OSError:
+        try:
+            path = os.path.join('tools', 'outputs', 'database.csv')
+            df.to_csv(path, index=False)
+        except OSError:
+            path = os.path.join('outputs', 'database.csv')
+            df.to_csv(path, index=False)
+
 
 if __name__ == '__main__':
     main()

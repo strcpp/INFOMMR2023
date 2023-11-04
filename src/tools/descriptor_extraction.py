@@ -41,11 +41,12 @@ class ShapeDescriptors:
 
     @classmethod
     def from_csv_row(cls, row, mesh):
-        model_class = str(row['Model Class'].item())  
-        model_name = str(row['Model Name'].item())  
-        
-        surface_area = float(row['Surface Area'].item()) if not row['Surface Area'].isnull().item() else 0.0
-        compactness = float(row['Compactness'].item()) if not row['Compactness'].isnull().item() else 0.0
+
+        model_class = row['Model Class']
+        model_name = row['Model Name']
+
+        surface_area = row['Surface Area'] if not row['Surface Area'].isnull() else 0.0
+        compactness = row['Compactness'] if not row['Compactness'].isnull() else 0.0
         rectangularity = float(row['Rectangularity'].item()) if not row['Rectangularity'].isnull().item() else 0.0
         diameter = float(row['Diameter'].item()) if not row['Diameter'].isnull().item() else 0.0
         convexity = float(row['Convexity'].item()) if not row['Convexity'].isnull().item() else 0.0

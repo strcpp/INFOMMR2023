@@ -1,8 +1,6 @@
 import moderngl_window as glw
 import moderngl as gl
 from render.shaders import Shaders
-from render.mesh import Mesh
-from scenes.basic_scene import BasicScene
 from scenes.query_scene import QueryScene
 import pathlib
 import numpy as np
