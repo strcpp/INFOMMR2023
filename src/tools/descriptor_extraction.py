@@ -2,48 +2,117 @@ import numpy as np
 from numba import njit
 import matplotlib.pyplot as plt
 import os
+import pandas as pd
+import ast
 
 output_dir1 = "tools/outputs/histograms/descriptors"
 output_dir2 = "src/tools/outputs/histograms/descriptors"
 
 np.random.seed(42)
 
-
+SAMPLE_SIZE = 1000
+BIN_SIZE = 10
 class ShapeDescriptors:
-    def __init__(self, mesh, model_class, model_name):
+    def __init__(self, mesh, model_class, model_name, surface_area, compactness, rectangularity, diameter, convexity, eccentricity, A3, D1, D2, D3, D4):
         self.mesh = mesh
-        self.model_class = model_class
-        self.model_name, _ = os.path.splitext(model_name)
         self.n_vertices = len(mesh.vertices)
         self.n_faces = len(mesh.faces)
-        self.surface_area = mesh.area
-        self.surface_area_normalized = self.surface_area
-        self.compactness = self.compute_compactness()
-        self.compactness_normalized = self.compactness
-        self.rectangularity = self.compute_rectangularity()
-        self.rectangularity_normalized = self.rectangularity
-        self.diameter = ShapeDescriptors.compute_diameter(self.mesh.convex_hull.vertices)
-        self.diameter_normalized = self.diameter
-        self.convexity = self.compute_convexity()
-        self.convexity_normalized = self.convexity
-        self.eccentricity = self.compute_eccentricity()
-        self.eccentricity_normalized = self.eccentricity
-        self.sample_size = 15
-        self.bin_size = 10
-        self.A3 = self.compute_A3(self.sample_size)
-        self.D1 = self.compute_D1(self.sample_size)
-        self.D2 = self.compute_D2(self.sample_size)
-        self.D3 = self.compute_D3(self.sample_size)
-        self.D4 = self.compute_D4(self.sample_size)
+        self.model_class = model_class
+        self.model_name = model_name
+        self.surface_area = surface_area
+        self.surface_area_normalized = surface_area
+        self.compactness = compactness
+        self.compactness_normalized = compactness
+        self.rectangularity = rectangularity
+        self.rectangularity_normalized = rectangularity
+        self.diameter = diameter
+        self.diameter_normalized = diameter
+        self.convexity = convexity
+        self.convexity_normalized = convexity
+        self.eccentricity = eccentricity
+        self.eccentricity_normalized = eccentricity
+        self.A3 = A3
+        self.D1 = D1
+        self.D2 = D2
+        self.D3 = D3
+        self.D4 = D4
+        self.sample_size = SAMPLE_SIZE
+        self.bin_size = BIN_SIZE
 
-    def compute_compactness(self):
-        V = self.mesh.volume
-        A = self.mesh.area
+    @classmethod
+    def from_csv_row(cls, row, mesh):
+        model_class = str(row['Model Class'].item())  
+        model_name = str(row['Model Name'].item())  
+        
+        surface_area = float(row['Surface Area'].item()) if not row['Surface Area'].isnull().item() else 0.0
+        compactness = float(row['Compactness'].item()) if not row['Compactness'].isnull().item() else 0.0
+        rectangularity = float(row['Rectangularity'].item()) if not row['Rectangularity'].isnull().item() else 0.0
+        diameter = float(row['Diameter'].item()) if not row['Diameter'].isnull().item() else 0.0
+        convexity = float(row['Convexity'].item()) if not row['Convexity'].isnull().item() else 0.0
+        eccentricity = float(row['Eccentricity'].item()) if not row['Eccentricity'].isnull().item() else 0.0
+        
+        A3 = [float(x) for x in ast.literal_eval(row['A3'].iloc[0])] if pd.notna(row['A3'].iloc[0]) else []
+        D1 = [float(x) for x in ast.literal_eval(row['D1'].iloc[0])] if pd.notna(row['D1'].iloc[0]) else []
+        D2 = [float(x) for x in ast.literal_eval(row['D2'].iloc[0])] if pd.notna(row['D2'].iloc[0]) else []
+        D3 = [float(x) for x in ast.literal_eval(row['D3'].iloc[0])] if pd.notna(row['D3'].iloc[0]) else []
+        D4 = [float(x) for x in ast.literal_eval(row['D4'].iloc[0])] if pd.notna(row['D4'].iloc[0]) else []
+        
+        return cls(
+            mesh=mesh, 
+            model_class=model_class,
+            model_name=model_name,
+            surface_area=surface_area,
+            compactness=compactness,
+            rectangularity=rectangularity,
+            diameter=diameter,
+            convexity=convexity,
+            eccentricity=eccentricity,
+            A3=A3,
+            D1=D1,
+            D2=D2,
+            D3=D3,
+            D4=D4)
+
+    @classmethod
+    def from_mesh(cls, mesh, model_class, model_name):
+        model_name, _ = os.path.splitext(model_name)
+        surface_area = mesh.area
+        compactness = cls.compute_compactness(mesh)
+        rectangularity = cls.compute_rectangularity(mesh)
+        diameter = cls.compute_diameter(mesh.convex_hull.vertices)
+        convexity = cls.compute_convexity(mesh)
+        eccentricity = cls.compute_eccentricity(mesh)
+        A3 = cls.compute_A3(mesh, SAMPLE_SIZE)
+        D1 = cls.compute_D1(mesh, SAMPLE_SIZE)
+        D2 = cls.compute_D2(mesh, SAMPLE_SIZE)
+        D3 = cls.compute_D3(mesh, SAMPLE_SIZE)
+        D4 = cls.compute_D4(mesh, SAMPLE_SIZE)
+        
+        return cls(
+            mesh=mesh,
+            model_class=model_class,
+            model_name=model_name,
+            surface_area=surface_area,
+            compactness=compactness,
+            rectangularity=rectangularity,
+            diameter=diameter,
+            convexity=convexity,
+            eccentricity=eccentricity,
+            A3=A3,
+            D1=D1,
+            D2=D2,
+            D3=D3,
+            D4=D4
+        )
+
+    def compute_compactness(mesh):
+        V = mesh.volume
+        A = mesh.area
         return (A ** 3) / (V ** 2)
 
-    def compute_rectangularity(self):
-        obb_volume = self.mesh.bounding_box_oriented.volume
-        return self.mesh.volume / obb_volume
+    def compute_rectangularity(mesh):
+        obb_volume = mesh.bounding_box_oriented.volume
+        return mesh.volume / obb_volume
 
     @staticmethod
     @njit
@@ -55,17 +124,17 @@ class ShapeDescriptors:
                 diameter = max(diameter, dist)
         return diameter
 
-    def compute_convexity(self):
-        return self.mesh.volume / self.mesh.convex_hull.volume
+    def compute_convexity(mesh):
+        return mesh.volume / mesh.convex_hull.volume
 
-    def compute_eccentricity(self):
-        covariance_matrix = np.cov(np.transpose(self.mesh.vertices))
+    def compute_eccentricity(mesh):
+        covariance_matrix = np.cov(np.transpose(mesh.vertices))
         eigenvalues = np.linalg.eigvals(covariance_matrix)
         return max(eigenvalues) / min(eigenvalues)
 
-    def compute_A3(self, num_samples):
+    def compute_A3(mesh, num_samples):
         angles = []
-        vertices = self.mesh.vertices
+        vertices = mesh.vertices
         for _ in range(num_samples):
             A, B, C = vertices[np.random.choice(vertices.shape[0], 3, replace=False)]
             BA = A - B
@@ -73,7 +142,6 @@ class ShapeDescriptors:
             cosine_angle = np.dot(BA, BC) / (np.linalg.norm(BA) * np.linalg.norm(BC))
             angle = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
             angles.append(angle)
-        self.A3 = angles
         return angles
 
     def save_A3_histogram_image(self):
@@ -102,18 +170,18 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def compute_D1(self, num_samples):
-        barycenter = self.mesh.centroid
+    def compute_D1(mesh, num_samples):
+        barycenter = mesh.centroid
 
         distances = []
-        vertices = self.mesh.vertices
+        vertices = mesh.vertices
         for _ in range(num_samples):
             # Sample a random vertex
             vertex = vertices[np.random.choice(vertices.shape[0])]
             # Compute the distance
             distance = np.linalg.norm(vertex - barycenter)
             distances.append(distance)
-        self.D1 = distances
+        D1 = distances
         return distances
 
     def save_D1_histogram_image(self):
@@ -136,9 +204,9 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def compute_D2(self, num_samples):
+    def compute_D2(mesh, num_samples):
         distances = []
-        vertices = self.mesh.vertices
+        vertices = mesh.vertices
         for _ in range(num_samples):
             # Sample two distinct random vertices
             vertex1, vertex2 = vertices[np.random.choice(vertices.shape[0], 2, replace=False)]
@@ -146,7 +214,7 @@ class ShapeDescriptors:
             # Compute the distance
             distance = np.linalg.norm(vertex1 - vertex2)
             distances.append(distance)
-        self.D2 = distances
+        D2 = distances
         return distances
 
     def save_D2_histogram_image(self):
@@ -169,9 +237,9 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def compute_D3(self, num_samples):
+    def compute_D3(mesh, num_samples):
         areas = []
-        vertices = self.mesh.vertices
+        vertices = mesh.vertices
         for _ in range(num_samples):
             # Sample three distinct random vertices
             A, B, C = vertices[np.random.choice(vertices.shape[0], 3, replace=False)]
@@ -187,7 +255,6 @@ class ShapeDescriptors:
             # Compute the area using Heron's formula
             area = np.sqrt(s * (s - a) * (s - b) * (s - c))
             areas.append(np.sqrt(area))
-        self.D3 = areas
         return areas
 
     def save_D3_histogram_image(self):
@@ -210,9 +277,9 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def compute_D4(self, num_samples):
+    def compute_D4(mesh, num_samples):
         volumes = []
-        vertices = self.mesh.vertices
+        vertices = mesh.vertices
         for _ in range(num_samples):
             # Sample four distinct random vertices
             A, B, C, D = vertices[np.random.choice(vertices.shape[0], 4, replace=False)]
@@ -224,7 +291,6 @@ class ShapeDescriptors:
             volume = np.abs(np.dot(AB, np.cross(AC, AD))) / 6
 
             volumes.append(np.cbrt(volume))
-        self.D4 = volumes
         return volumes
 
     def save_D4_histogram_image(self):

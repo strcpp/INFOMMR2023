@@ -5,10 +5,11 @@ from sklearn.neighbors import NearestNeighbors
 import os
 from tqdm import tqdm
 import warnings
+from tools.descriptor_extraction import *
+
 warnings.filterwarnings("ignore", category=RuntimeWarning)
-
 csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
-
+database_file_path = os.path.join('src', 'tools', 'outputs', 'database.csv')
 
 def histogram(df, column_name, class_name, show):
     """
@@ -151,3 +152,42 @@ def return_bounding_box(model_name, mesh):
                 [bounding_box[3], bounding_box[4], bounding_box[5]]]
 
     return bounding_box
+
+def return_shape_descriptor(model_name, mesh):
+    model_name = model_name.replace('.obj', '')
+    try:
+        df = pd.read_csv(os.path.join(os.getcwd(), database_file_path))
+    except FileNotFoundError:
+        new_path = os.path.join('tools', 'outputs', 'database.csv')
+        df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+
+    row = df[df['Model Name'] == model_name]
+    return ShapeDescriptors.from_csv_row(row, mesh)
+
+
+def return_shape_descriptors(all_model_names, all_meshes):
+    # Attempt to read the CSV file from the default path
+    try:
+        df = pd.read_csv(os.path.join(os.getcwd(), database_file_path))
+    except FileNotFoundError:
+        # If not found, try to read it from the alternative path
+        new_path = os.path.join('tools', 'outputs', 'database.csv')
+        df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+    
+    # Create a dictionary to hold the ShapeDescriptors, with model names as keys
+    descriptors_map = {}
+
+    # Loop over the items in all_model_names dictionary
+    for model_name_key, model_names_list in all_model_names.items():
+        # Loop through the list of model name strings
+        for model_name_obj in model_names_list:
+            # Standardize the model name by removing the '.obj' extension
+            standardized_model_name = model_name_obj.replace('.obj', '')
+            # Select the row in the dataframe that corresponds to the model name
+            row = df[df['Model Name'] == standardized_model_name]
+            # Retrieve the corresponding mesh object using the model name key
+            mesh = all_meshes[model_name_obj]
+            # Use the from_csv_row class method to create a ShapeDescriptor for each model name
+            descriptors_map[model_name_obj] = ShapeDescriptors.from_csv_row(row, mesh)
+
+    return descriptors_map

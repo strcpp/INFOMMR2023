@@ -40,7 +40,6 @@ class Mesh:
 
         start = time.time()
 
-        self.set_data()
         end = time.time()
 
         print("elapsed??: ", end - start)

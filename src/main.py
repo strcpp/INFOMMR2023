@@ -3,6 +3,7 @@ import moderngl as gl
 from render.shaders import Shaders
 from render.mesh import Mesh
 from scenes.basic_scene import BasicScene
+from scenes.query_scene import QueryScene
 import pathlib
 import numpy as np
 import imgui
@@ -50,7 +51,6 @@ class App(glw.WindowConfig):
 
         # initialize all assets
         Shaders.instance(self)
-        Mesh.instance(self)
 
         imgui.create_context()
 
@@ -59,7 +59,7 @@ class App(glw.WindowConfig):
 
         self.fps_dims = (10, self.window_size[1] - 10)
 
-        self.scene = BasicScene(self)
+        self.scene = QueryScene(self)
         self.scene.load()
 
     def render(self, time: float, frame_time: float) -> None:

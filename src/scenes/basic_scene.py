@@ -14,7 +14,7 @@ import numpy as np
 from tools.descriptor_extraction import *
 import pynndescent
 from scenes.scene_utils import *
-
+from render.mesh import Mesh
 
 class BasicScene(Scene):
     """
@@ -31,7 +31,7 @@ class BasicScene(Scene):
     show_wireframe = True
     selected_class = 0
     selected_model = 0
-    models_path = os.path.join(os.path.dirname(__file__), '../../resources/models')
+    models_path = os.path.join(os.path.dirname(__file__), '../../resources/Default/models')
     average_model = None
     refined_meshes = {}
     poorly_sampled = []
@@ -65,6 +65,7 @@ class BasicScene(Scene):
     selected_evaluation_subject = 0
 
     def load(self) -> None:
+        Mesh.instance(self.app).set_data()
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
 
         # Load all models
@@ -95,7 +96,7 @@ class BasicScene(Scene):
         self.current_class = self.average_model["Shape Class"]
         self.lines = Lines(self.app, line_width=1)
         self.average_model = self.current_model
-        path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', self.current_class,
+        path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default', self.current_class,
                             self.current_model_name)
         mesh = trimesh.load_mesh(path)
         self.average_vertices = len(mesh.vertices)
@@ -108,7 +109,7 @@ class BasicScene(Scene):
             name = outlier["Shape Name"]
             model_class = outlier["Shape Class"]
             bounding_box = return_bounding_box(name, None)
-            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', outlier['Shape Class'],
+            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources',  'models', 'Default',  outlier['Shape Class'],
                                 name)
             mesh = trimesh.load_mesh(path)
             refined_mesh = resample(mesh, self.target_faces)
@@ -139,7 +140,7 @@ class BasicScene(Scene):
         for i, model in tqdm(enumerate(self.normalized), desc="Normalizing shapes"):
             model_class = model[-1]
             name = model[-2]
-            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', model_class, name)
+            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default',  model_class, name)
             mesh = trimesh.load_mesh(path)
 
             # Step 1: Resample
@@ -172,7 +173,7 @@ class BasicScene(Scene):
             scale_factor = 1.0 / max_dimension
             mesh.apply_scale(scale_factor)
             bounding_box = return_bounding_box(None, mesh)
-            descriptors = ShapeDescriptors(mesh, model_class, name)
+            descriptors = ShapeDescriptors.from_mesh(mesh, model_class, name)
 
             self.normalized[i] = (
                 Model(self.app, name, mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box, None),
@@ -263,7 +264,7 @@ class BasicScene(Scene):
                 for model_class, model_name in self.models.items():
                     for name in model_name:
                         if name not in self.refined_meshes:
-                            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models',
+                            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources','models',  'Default',
                                                 model_class,
                                                 name)
                             self.refined_meshes[name] = (model_class, name, trimesh.load_mesh(path))

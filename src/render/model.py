@@ -18,17 +18,19 @@ class Model:
         :param app: Glw app.
         :param mesh_name: Name of the model's mesh.
         """
-        meshes = Mesh.instance(mesh_name)
+        meshes = Mesh.instance(app)
         # meshes.set_mesh_name(mesh_name)
         # meshes.set_data()
         programs = Shaders.instance()
         self.prog = programs.get('base-flat')
         self.app = app
-        self.command = meshes.data[mesh_name]
+    
         if mesh is not None:
             self.mesh = mesh
             new_vao = meshes.trimesh_to_vao(mesh, self.prog)
-            self.command = (new_vao, self.command[1])
+            self.command = (new_vao, None)
+        else:
+            self.command = meshes.data[mesh_name]
 
         self.translation = Vector3()
         self.rotation = Quaternion()
@@ -38,7 +40,7 @@ class Model:
 
         self.model_transformation = Matrix44.identity()
         self.color = [0, 0, 0]
-
+        
     def set_shading(self, shading):
         programs = Shaders.instance()
         if shading == "flat":
