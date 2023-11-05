@@ -100,19 +100,18 @@ def euclidean_distance(x1: np.ndarray, x2: np.ndarray) -> float:
     return np.sqrt(np.sum((x1 - x2) ** 2))
 
 
-def get_best_matching_shapes(
-        current_mesh: ShapeDescriptors, all_meshes: list[any], num_neighbors: int
-) -> tuple[list[any], list[float]]:
-    """ Finds the k best matching shapes for a query shape. """
-    distances = np.zeros(len(all_meshes))
-    for i in range(len(all_meshes)):
-        x1 = np.array(current_mesh.get_normalized_features())
-        x2 = np.array(all_meshes[i][6].get_normalized_features())
-        distances[i] = euclidean_distance(x1, x2)
-    sorted_distances = np.argsort(distances)[:num_neighbors]
-    best_matching_shapes = [all_meshes[k] for k in sorted_distances]
-    best_distances = [distances[k] for k in sorted_distances]
-    return best_matching_shapes, best_distances
+def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
+    distances = {}
+    current_features = np.array(current_mesh.get_normalized_features())
+
+    for model_name, mesh in all_meshes.items():
+        mesh_features = np.array(mesh.get_normalized_features())
+        distances[model_name] = euclidean_distance(current_features, mesh_features)
+
+    sorted_distances = sorted(distances.items(), key=lambda item: item[1])
+    best_matching_shapes = [model_name for model_name, _ in sorted_distances[:num_neighbors]]
+
+    return best_matching_shapes, sorted_distances
 
 
 def calculate_shapes_per_class(shapes: list[any]) -> dict[str, int]:
@@ -127,29 +126,40 @@ def calculate_shapes_per_class(shapes: list[any]) -> dict[str, int]:
     return shapes_per_class
 
 
-def calculate_precision(shape_class: str, matched_shapes: list[any]) -> float:
+def calculate_precision(name: str, matched_shapes: list[any], all_classes: dict[str, list[str]]) -> tuple[float, str]:
     """ Calculates the precision of a query. """
     tp = 0
     fp = 0
-    for shape in matched_shapes:
-        if shape[5] == shape_class:
+    for key, values in all_classes.items():
+        if name in values:
+            correct_class = key
+            break
+    for matched_shape in matched_shapes:
+        if matched_shape in all_classes.get(correct_class, []):
             tp += 1
         else:
             fp += 1
-    return tp / (tp + fp)
+    return tp / (tp + fp) if (tp + fp) > 0 else 0, correct_class
 
 
-def calculate_recall(shape_class: str, shape_count: int, matched_shapes: list[any]) -> float:
+def calculate_recall(name: str, matched_shapes: list[any], all_classes: dict[str, list[str]]) -> tuple[float, str]:
     """ Calculates the recall of a query. """
     tp = 0
-    for shape in matched_shapes:
-        if shape[5] == shape_class:
+    for key, values in all_classes.items():
+        if name in values:
+            correct_class = key
+            break
+    for matched_shape in matched_shapes:
+        if matched_shape in all_classes.get(correct_class, []):
             tp += 1
-    fn = shape_count - tp
-    return tp / (tp + fn)
+    fn = len(all_classes.get(correct_class, [])) - tp
+    return tp / (tp + fn) if (tp + fn) > 0 else 0, correct_class
 
 
-def evaluate_query(query_type: str, all_shapes, k: int, shapes_per_class: dict[str, int], index: NNDescent):
+def evaluate_query(
+        query_type: str, all_shapes, k: int, shapes_per_class: dict[str, int], all_classes: dict[str, list[str]],
+        index: NNDescent
+):
     """ Evaluates quality of selected query. """
     precisions = {}
     recalls = {}
@@ -157,29 +167,28 @@ def evaluate_query(query_type: str, all_shapes, k: int, shapes_per_class: dict[s
     average_precision = 0
     average_recall = 0
     # Query all shapes
-    for query_shape in tqdm(all_shapes, desc=f"Finding the {k} Best Matching Shapes", leave=False):
-
+    for name, descriptor in tqdm(all_shapes.items(),
+                                 desc=f"Finding the {k} Best Matching Shapes for each Shape", leave=False):
         # Query based on selected query type
         if query_type == "Custom":
-            best_matching_shapes, _ = get_best_matching_shapes(
-                query_shape[6], [shape for shape in all_shapes if shape[4] != query_shape[4]], k
+            matching_names, _ = get_best_matching_shapes(
+                descriptor, {key: value for key, value in all_shapes.items() if key != name}, k
             )
         elif query_type == "ANN":
-            neighbor_indexes, _ = index.query(np.array([query_shape[6].get_normalized_features()]), k=k)
-            best_matching_shapes = [all_shapes[n] for n in neighbor_indexes.flatten().tolist()]
+            neighbor_indexes, _ = index.query(np.array([descriptor.get_normalized_features()]), k=k + 1)
+            matching_names = [list(all_shapes.keys())[k] for k in neighbor_indexes.flatten().tolist()[1:]]
 
-        precision = calculate_precision(query_shape[5], best_matching_shapes)
-        recall = calculate_recall(query_shape[5],
-                                  shapes_per_class[query_shape[5]],
-                                  best_matching_shapes)
+        precision, correct_class = calculate_precision(name, matching_names, all_classes)
+        recall, _ = calculate_recall(name, matching_names, all_classes)
         average_precision += precision
         average_recall += recall
-        if query_shape[5] in precisions:
-            precisions[query_shape[5]] += precision
-            recalls[query_shape[5]] += recall
+
+        if correct_class in precisions:
+            precisions[correct_class] += precision
+            recalls[correct_class] += recall
         else:
-            precisions[query_shape[5]] = precision
-            recalls[query_shape[5]] = recall
+            precisions[correct_class] = precision
+            recalls[correct_class] = recall
 
     # Calculate averages
     for shape_class in shapes_per_class.keys():
@@ -198,6 +207,10 @@ def evaluate_query(query_type: str, all_shapes, k: int, shapes_per_class: dict[s
     precisions["Average"] = average_precision
     recalls["Average"] = average_recall
     f1_scores["Average"] = f1_score
+
+    print(average_precision)
+    print(average_recall)
+    print(f1_score)
 
     for shape_class in precisions.keys():
         precision_sum_recall = precisions[shape_class] + recalls[shape_class]

@@ -92,7 +92,7 @@ def main():
                 paths_to_load.append((path, model_class, file))
 
     # Use multiprocessing to parallelize the loading
-    with Pool(processes=cpu_count() - 4) as pool:
+    with Pool(processes=cpu_count()) as pool:
         meshes = pool.map(load_model, paths_to_load)
 
     average_model, _ = return_neighbors()
@@ -105,34 +105,83 @@ def main():
             tqdm(pool.imap_unordered(process_mesh, [(m, target_faces) for m in meshes]), total=len(meshes)))
     data_list = []
 
-    for descriptor in tqdm(all_descriptors, desc="Calculating Descriptors for all Shapes", leave=False):
+    for descriptor in tqdm(all_descriptors, desc="Saving Descriptors for all Shapes", leave=False):
         data = {
             "Model Class": descriptor.model_class,
             "Model Name": descriptor.model_name,
-            "Surface Area": descriptor.surface_area,
-            "Compactness": descriptor.compactness,
-            "Rectangularity": descriptor.rectangularity,
-            "Diameter": descriptor.diameter,
-            "Convexity": descriptor.convexity,
-            "Eccentricity": descriptor.eccentricity,
-            "A3": descriptor.A3,
-            "D1": descriptor.D1,
-            "D2": descriptor.D2,
-            "D3": descriptor.D3,
-            "D4": descriptor.D4,
+            "Surface Area": float(f"{descriptor.surface_area:.3f}"),
+            "Compactness": float(f"{descriptor.compactness:.3f}"),
+            "Rectangularity": float(f"{descriptor.rectangularity:.3f}"),
+            "Diameter": float(f"{descriptor.diameter:.3f}"),
+            "Convexity": float(f"{descriptor.convexity:.3f}"),
+            "Eccentricity": float(f"{descriptor.eccentricity:.3f}"),
+            "A3": [float(f"{x:.3f}") for x in descriptor.A3],
+            "D1": [float(f"{x:.3f}") for x in descriptor.D1],
+            "D2": [float(f"{x:.3f}") for x in descriptor.D2],
+            "D3": [float(f"{x:.3f}") for x in descriptor.D3],
+            "D4": [float(f"{x:.3f}") for x in descriptor.D4],
         }
         data_list.append(data)
 
+    # headers = ["Model Class",
+    #         "Model Name",
+    #         "Surface Area",
+    #         "Compactness",
+    #         "Rectangularity",
+    #         "Diameter",
+    #         "Convexity",
+    #         "Eccentricity",
+    #         "A3",
+    #         "D1",
+    #         "D2",
+    #         "D3",
+    #         "D4"]
+    #
+    # try:
+    #     with open(database_path, mode='w', newline='') as file:
+    #         writer = csv.writer(file, delimiter=';')
+    #         writer.writerow(headers)
+    #
+    #     # Append shape data to the CSV file
+    #     with open(database_path, mode='a', newline='') as file:
+    #         writer = csv.DictWriter(file, fieldnames=headers, delimiter=';')
+    #         for shape in data_list:
+    #             writer.writerow(shape)
+    # except FileNotFoundError:
+    #     try:
+    #         path = os.path.join('tools', 'outputs', 'database.csv')
+    #         with open(path, mode='w', newline='') as file:
+    #             writer = csv.writer(file, delimiter=';')
+    #             writer.writerow(headers)
+    #
+    #         # Append shape data to the CSV file
+    #         with open(path, mode='a', newline='') as file:
+    #             writer = csv.DictWriter(file, fieldnames=headers, delimiter=';')
+    #             for shape in data_list:
+    #                 writer.writerow(shape)
+    #     except FileNotFoundError:
+    #         path = os.path.join('outputs', 'database.csv')
+    #         with open(path, mode='w', newline='') as file:
+    #             writer = csv.writer(file, delimiter=';')
+    #             writer.writerow(headers)
+    #
+    #         # Append shape data to the CSV file
+    #         with open(path, mode='a', newline='') as file:
+    #             writer = csv.DictWriter(file, fieldnames=headers, delimiter=';')
+    #             for shape in data_list:
+    #                 writer.writerow(shape)
+
     df = pd.DataFrame(data_list)
+
     try:
-        df.to_csv(database_path, index=False)
+        df.to_csv(database_path, index=False, sep=';')
     except OSError:
         try:
             path = os.path.join('tools', 'outputs', 'database.csv')
-            df.to_csv(path, index=False)
+            df.to_csv(path, index=False, sep=';')
         except OSError:
             path = os.path.join('outputs', 'database.csv')
-            df.to_csv(path, index=False)
+            df.to_csv(path, index=False, sep=';')
 
 
 if __name__ == '__main__':

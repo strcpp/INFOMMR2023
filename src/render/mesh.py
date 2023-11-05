@@ -38,12 +38,6 @@ class Mesh:
         self.app = app
         self.data = {}
 
-        start = time.time()
-
-        end = time.time()
-
-        print("elapsed??: ", end - start)
-
     def set_mesh_name(self, mesh_name):
         self.mesh_name = mesh_name
 

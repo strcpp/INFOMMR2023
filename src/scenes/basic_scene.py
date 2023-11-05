@@ -16,6 +16,7 @@ import pynndescent
 from scenes.scene_utils import *
 from render.mesh import Mesh
 
+
 class BasicScene(Scene):
     """
     Implements the scene of the application.
@@ -109,7 +110,8 @@ class BasicScene(Scene):
             name = outlier["Shape Name"]
             model_class = outlier["Shape Class"]
             bounding_box = return_bounding_box(name, None)
-            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources',  'models', 'Default',  outlier['Shape Class'],
+            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default',
+                                outlier['Shape Class'],
                                 name)
             mesh = trimesh.load_mesh(path)
             refined_mesh = resample(mesh, self.target_faces)
@@ -140,7 +142,8 @@ class BasicScene(Scene):
         for i, model in tqdm(enumerate(self.normalized), desc="Normalizing shapes"):
             model_class = model[-1]
             name = model[-2]
-            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default',  model_class, name)
+            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default', model_class,
+                                name)
             mesh = trimesh.load_mesh(path)
 
             # Step 1: Resample
@@ -179,7 +182,7 @@ class BasicScene(Scene):
                 Model(self.app, name, mesh), get_bb_lines(bounding_box), get_basis_lines(bounding_box, None),
                 get_basis_lines(None, mesh.centroid), name, model_class, descriptors)
 
-        self.normalized = sorted(self.normalized, key=lambda x: x[5])\
+        self.normalized = sorted(self.normalized, key=lambda x: x[5]) \
 
         # Normalizing all single features
         normalize_single_features([element[6] for element in self.normalized])
@@ -264,7 +267,7 @@ class BasicScene(Scene):
                 for model_class, model_name in self.models.items():
                     for name in model_name:
                         if name not in self.refined_meshes:
-                            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources','models',  'Default',
+                            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default',
                                                 model_class,
                                                 name)
                             self.refined_meshes[name] = (model_class, name, trimesh.load_mesh(path))
@@ -394,7 +397,6 @@ class BasicScene(Scene):
         imgui.spacing()
         imgui.indent(16)
         if imgui.button("Evaluate CBSR System"):
-
             self.shapes_per_class = calculate_shapes_per_class(self.normalized)
             self.show_rest_of_ui_step_5 = False
             self.show_rest_of_ui_step_6 = True

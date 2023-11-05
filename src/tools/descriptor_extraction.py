@@ -10,10 +10,13 @@ output_dir2 = "src/tools/outputs/histograms/descriptors"
 
 np.random.seed(42)
 
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = 100
 BIN_SIZE = 10
+
+
 class ShapeDescriptors:
-    def __init__(self, mesh, model_class, model_name, surface_area, compactness, rectangularity, diameter, convexity, eccentricity, A3, D1, D2, D3, D4):
+    def __init__(self, mesh, model_class, model_name, surface_area, compactness, rectangularity, diameter, convexity,
+                 eccentricity, A3, D1, D2, D3, D4):
         self.mesh = mesh
         self.n_vertices = len(mesh.vertices)
         self.n_faces = len(mesh.faces)
@@ -45,21 +48,31 @@ class ShapeDescriptors:
         model_class = row['Model Class']
         model_name = row['Model Name']
 
-        surface_area = row['Surface Area'] if not row['Surface Area'].isnull() else 0.0
-        compactness = row['Compactness'] if not row['Compactness'].isnull() else 0.0
-        rectangularity = float(row['Rectangularity'].item()) if not row['Rectangularity'].isnull().item() else 0.0
-        diameter = float(row['Diameter'].item()) if not row['Diameter'].isnull().item() else 0.0
-        convexity = float(row['Convexity'].item()) if not row['Convexity'].isnull().item() else 0.0
-        eccentricity = float(row['Eccentricity'].item()) if not row['Eccentricity'].isnull().item() else 0.0
-        
-        A3 = [float(x) for x in ast.literal_eval(row['A3'].iloc[0])] if pd.notna(row['A3'].iloc[0]) else []
-        D1 = [float(x) for x in ast.literal_eval(row['D1'].iloc[0])] if pd.notna(row['D1'].iloc[0]) else []
-        D2 = [float(x) for x in ast.literal_eval(row['D2'].iloc[0])] if pd.notna(row['D2'].iloc[0]) else []
-        D3 = [float(x) for x in ast.literal_eval(row['D3'].iloc[0])] if pd.notna(row['D3'].iloc[0]) else []
-        D4 = [float(x) for x in ast.literal_eval(row['D4'].iloc[0])] if pd.notna(row['D4'].iloc[0]) else []
-        
+        surface_area = row['Surface Area'].iloc[0] if not pd.isnull(row['Surface Area'].iloc[0]) else 0.0
+
+        compactness = row['Compactness'].iloc[0] if not pd.isnull(row['Compactness'].iloc[0]) else 0.0
+        rectangularity = row['Rectangularity'].iloc[0] if not pd.isnull(row['Rectangularity'].iloc[0]) else 0.0
+        diameter = row['Diameter'].iloc[0] if not pd.isnull(row['Diameter'].iloc[0]) else 0.0
+        convexity = row['Convexity'].iloc[0] if not pd.isnull(row['Convexity'].iloc[0]) else 0.0
+        eccentricity = row['Eccentricity'].iloc[0] if not pd.isnull(row['Eccentricity'].iloc[0]) else 0.0
+
+        test = row['A3'].values[0]
+
+        # Remove the square brackets and split the string into a list of strings
+        data_str = test[1:-1]  # Remove square brackets
+        numbers = data_str.split(', ')  # Split the string using ', ' as the separator
+
+        # Convert the list of strings to a list of floats
+        data = [float(num) for num in numbers]
+
+        A3 = [float(num) for num in row['A3'].values[0][1:-1].split(', ')]
+        D1 = [float(num) for num in row['D1'].values[0][1:-1].split(', ')]
+        D2 = [float(num) for num in row['D2'].values[0][1:-1].split(', ')]
+        D3 = [float(num) for num in row['D3'].values[0][1:-1].split(', ')]
+        D4 = [float(num) for num in row['D4'].values[0][1:-1].split(', ')]
+
         return cls(
-            mesh=mesh, 
+            mesh=mesh,
             model_class=model_class,
             model_name=model_name,
             surface_area=surface_area,
@@ -88,7 +101,7 @@ class ShapeDescriptors:
         D2 = cls.compute_D2(mesh, SAMPLE_SIZE)
         D3 = cls.compute_D3(mesh, SAMPLE_SIZE)
         D4 = cls.compute_D4(mesh, SAMPLE_SIZE)
-        
+
         return cls(
             mesh=mesh,
             model_class=model_class,
@@ -107,7 +120,9 @@ class ShapeDescriptors:
         )
 
     def compute_compactness(mesh):
-        V = mesh.volume
+        #V = mesh.bounding_box_oriented.volume
+        #print(mesh.bounding_sphere.volume)
+        V = mesh.bounding_sphere.volume
         A = mesh.area
         return (A ** 3) / (V ** 2)
 
@@ -215,7 +230,6 @@ class ShapeDescriptors:
             # Compute the distance
             distance = np.linalg.norm(vertex1 - vertex2)
             distances.append(distance)
-        D2 = distances
         return distances
 
     def save_D2_histogram_image(self):
