@@ -149,7 +149,7 @@ class QueryScene(Scene):
         # Condition for poorly sampled shapes
         condition = (((all_neighbors['Number of Faces'] < 100) | (all_neighbors['Number of Vertices'] < 100) |
                       (all_neighbors['Number of Faces'] > 50000) | (all_neighbors['Number of Vertices'] > 50000)))
-        poorly_sampled = all_neighbors[condition]
+        poorly_sampled = all_neighbors[condition][:1]
 
         # Resampling poorly sampled outliers
         for _, outlier in tqdm(poorly_sampled.iterrows(), desc="Resampling outliers"):
