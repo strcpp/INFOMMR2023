@@ -98,14 +98,23 @@ def euclidean_distance(x1: np.ndarray, x2: np.ndarray) -> float:
     """ Calculates the Euclidean distance of 2 features. """
     return np.sqrt(np.sum((x1 - x2) ** 2))
 
+from scipy.stats import wasserstein_distance
+
+
+
 
 def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
     distances = {}
     current_features = np.array(current_mesh.get_normalized_features())
+    #current_features2 = np.array(current_mesh.get_normalized_features2())
 
     for model_name, mesh in all_meshes.items():
         mesh_features = np.array(mesh.get_normalized_features())
         distances[model_name] = euclidean_distance(current_features, mesh_features)
+
+
+       # mesh_features = np.array(mesh.get_normalized_features2())
+        #distances[model_name] += euclidean_distance(current_features2, mesh_features)
 
     sorted_distances = sorted(distances.items(), key=lambda item: item[1])
     best_matching_shapes = [model_name for model_name, _ in sorted_distances[:num_neighbors]]

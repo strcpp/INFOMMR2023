@@ -356,6 +356,14 @@ class QueryScene(Scene):
                 imgui.text("{}: {:.2f}".format("Convexity", self.current_descriptor.convexity))
                 imgui.text("{}: {:.2f}".format("Eccentricity", self.current_descriptor.eccentricity))
 
+                if imgui.button("Save Distributions"):
+                    self.current_descriptor.save_A3_histogram_image()
+                    self.current_descriptor.save_D1_histogram_image()
+                    self.current_descriptor.save_D2_histogram_image()
+                    self.current_descriptor.save_D3_histogram_image()
+                    self.current_descriptor.save_D4_histogram_image()
+                imgui.text("")
+
             # End the window
             imgui.end()
 

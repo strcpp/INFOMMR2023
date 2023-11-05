@@ -10,7 +10,7 @@ output_dir2 = "src/tools/outputs/histograms/descriptors"
 
 np.random.seed(42)
 
-SAMPLE_SIZE = 10
+SAMPLE_SIZE = 1000
 BIN_SIZE = 10
 
 
@@ -45,8 +45,8 @@ class ShapeDescriptors:
     @classmethod
     def from_csv_row(cls, row, mesh):
 
-        model_class = row['Model Class']
-        model_name = row['Model Name']
+        model_class = row['Model Class'].item()
+        model_name = row['Model Name'].item()
 
         surface_area = row['Surface Area'].iloc[0] if not pd.isnull(row['Surface Area'].iloc[0]) else 0.0
 
@@ -120,8 +120,6 @@ class ShapeDescriptors:
         )
 
     def compute_compactness(mesh):
-        #V = mesh.bounding_box_oriented.volume
-        #print(mesh.bounding_sphere.volume)
         V = mesh.volume
         A = mesh.area
         return (A ** 3) / (V ** 2)
@@ -158,10 +156,13 @@ class ShapeDescriptors:
             cosine_angle = np.dot(BA, BC) / (np.linalg.norm(BA) * np.linalg.norm(BC))
             angle = np.arccos(np.clip(cosine_angle, -1.0, 1.0))
             angles.append(angle)
-        return angles
+
+        histogram, bin_edges = np.histogram(angles, bins=BIN_SIZE, range=(0, np.pi))
+        a3 = [x / np.sum(histogram) for x in histogram]
+        return a3
 
     def save_A3_histogram_image(self):
-        a3 = self.compute_A3(self.sample_size)
+        a3 = self.A3
 
         histogram, bin_edges = np.histogram(a3, bins=self.bin_size, range=(0, np.pi))
 
@@ -183,6 +184,7 @@ class ShapeDescriptors:
             output_path = os.path.join(output_dir1, filename)
         except FileNotFoundError:
             output_path = os.path.join(output_dir2, filename)
+
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
@@ -197,11 +199,14 @@ class ShapeDescriptors:
             # Compute the distance
             distance = np.linalg.norm(vertex - barycenter)
             distances.append(distance)
-        D1 = distances
-        return distances
+        histogram, bin_edges = np.histogram(distances, bins=BIN_SIZE)
+        d1 = [x / np.sum(histogram) for x in histogram]
+        return d1
 
     def save_D1_histogram_image(self):
-        d1 = self.compute_D1(self.sample_size)
+        d1 = self.D1
+        histogram, bin_edges = np.histogram(d1, bins=self.bin_size)
+        self.D1 = [x / np.sum(histogram) for x in histogram]
 
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.hist(d1, bins=self.bin_size, edgecolor='black')
@@ -230,11 +235,14 @@ class ShapeDescriptors:
             # Compute the distance
             distance = np.linalg.norm(vertex1 - vertex2)
             distances.append(distance)
-        return distances
+        histogram, bin_edges = np.histogram(distances, bins=BIN_SIZE)
+        d2 = [x / np.sum(histogram) for x in histogram]
+        return d2
 
     def save_D2_histogram_image(self):
-        d2 = self.compute_D2(self.sample_size)
-
+        d2 = self.D2
+        histogram, bin_edges = np.histogram(d2, bins=self.bin_size)
+        self.D2 = [x / np.sum(histogram) for x in histogram]
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.hist(d2, bins=self.bin_size, edgecolor='black')
         ax.set_xlabel('Distance')
@@ -260,20 +268,34 @@ class ShapeDescriptors:
             A, B, C = vertices[np.random.choice(vertices.shape[0], 3, replace=False)]
 
             # Compute the lengths of the sides of the triangle
-            a = np.linalg.norm(B - C)
-            b = np.linalg.norm(A - C)
-            c = np.linalg.norm(A - B)
+            a = round(np.linalg.norm(B - C), 3)
+            b = round(np.linalg.norm(A - C), 3)
+            c = round(np.linalg.norm(A - B), 3)
 
             # Compute the semi-perimeter
-            s = (a + b + c) / 2
+            s = round(((a + b + c) / 2), 3)
 
             # Compute the area using Heron's formula
-            area = np.sqrt(s * (s - a) * (s - b) * (s - c))
+            area = round(np.sqrt(np.abs(s * (s - a) * (s - b) * (s - c))), 3)
             areas.append(np.sqrt(area))
-        return areas
+            try:
+                histogram, bin_edges = np.histogram(areas, bins=BIN_SIZE)
+            except ValueError:
+                print(a)
+                print(b)
+                print(c)
+                print(s)
+                print(s * (s - a) * (s - b) * (s - c))
+                print(area)
+                raise ValueError
+        d3 = [x / np.sum(histogram) for x in histogram]
+        return d3
 
     def save_D3_histogram_image(self):
-        d3 = self.compute_D3(self.sample_size)
+        d3 = self.D3
+
+        histogram, bin_edges = np.histogram(d3, bins=self.bin_size)
+        self.D3 = [x / np.sum(histogram) for x in histogram]
 
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.hist(d3, bins=self.bin_size, edgecolor='black')
@@ -306,10 +328,15 @@ class ShapeDescriptors:
             volume = np.abs(np.dot(AB, np.cross(AC, AD))) / 6
 
             volumes.append(np.cbrt(volume))
-        return volumes
+        histogram, bin_edges = np.histogram(volumes, bins=BIN_SIZE)
+        d4 = [x / np.sum(histogram) for x in histogram]
+        return d4
 
     def save_D4_histogram_image(self):
-        d4 = self.compute_D4(self.sample_size)
+        d4 = self.D4
+
+        histogram, bin_edges = np.histogram(d4, bins=self.bin_size)
+        self.D4 = [x / np.sum(histogram) for x in histogram]
 
         fig, ax = plt.subplots(figsize=(10, 6))
         ax.hist(d4, bins=self.bin_size, edgecolor='black')
@@ -338,19 +365,29 @@ class ShapeDescriptors:
 
     def get_normalized_features(self):
 
-        return_list = [self.surface_area_normalized * 0.05,
-                       self.compactness_normalized * 0.05,
-                       self.rectangularity_normalized * 0.05,
-                       self.diameter_normalized * 0.05,
-                       self.convexity_normalized * 0.05,
-                       self.eccentricity_normalized * 0.05,
+        return_list = [self.surface_area_normalized * 1,
+                       self.compactness_normalized * 1,
+                       self.rectangularity_normalized * 1,
+                       self.diameter_normalized * 1,
+                       self.convexity_normalized * 1,
+                       self.eccentricity_normalized * 1,
                        ]
 
-        return_list.extend([x * 0.1 for x in self.A3])
-        return_list.extend([x * 0.15 for x in self.D1])
-        return_list.extend([x * 0.15 for x in self.D2])
-        return_list.extend([x * 0.15 for x in self.D3])
-        return_list.extend([x * 0.15 for x in self.D4])
+        return_list.extend(self.A3)
+        return_list.extend(self.D1)
+        return_list.extend(self.D2)
+        return_list.extend(self.D3)
+        return_list.extend(self.D4)
+
+        return return_list
+
+    def get_normalized_features2(self):
+        return_list = []
+        return_list.extend(self.A3)
+        return_list.extend(self.D1)
+        return_list.extend(self.D2)
+        return_list.extend(self.D3)
+        return_list.extend(self.D4)
 
         return return_list
 
