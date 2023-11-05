@@ -10,7 +10,7 @@ output_dir2 = "src/tools/outputs/histograms/descriptors"
 
 np.random.seed(42)
 
-SAMPLE_SIZE = 100
+SAMPLE_SIZE = 10
 BIN_SIZE = 10
 
 
@@ -122,7 +122,7 @@ class ShapeDescriptors:
     def compute_compactness(mesh):
         #V = mesh.bounding_box_oriented.volume
         #print(mesh.bounding_sphere.volume)
-        V = mesh.bounding_sphere.volume
+        V = mesh.volume
         A = mesh.area
         return (A ** 3) / (V ** 2)
 

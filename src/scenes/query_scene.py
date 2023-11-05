@@ -15,7 +15,7 @@ import numpy as np
 from tools.descriptor_extraction import *
 from numba import njit
 from multiprocessing import Pool, cpu_count
-from scenes.scene_utils import euclidean_distance, get_bb_lines, get_basis_lines, evaluate_query, get_best_matching_shapes
+from scenes.scene_utils import euclidean_distance, get_bb_lines, get_basis_lines, evaluate_query, get_best_matching_shapes, resample
 import pynndescent
 
 
@@ -59,7 +59,8 @@ class QueryScene(Scene):
     show_wireframe = False
     selected_class = 0
     selected_model = 0
-    models_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Normalized')
+    original_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Default')
+    normalized_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Normalized')
     average_model = None
     lines = None
     model_bb = []
@@ -89,18 +90,24 @@ class QueryScene(Scene):
     evaluate = False
     selected_evaluation_subject = 0
     precisions, recalls, f1_scores = {}, {}, {}
+    poorly_sampled = []
+    refined = []
+    show_poorly_sampled = False
+    selected_poorly_sampled = 0
+    show_normalized = False
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
         paths_to_load = []
 
-        for root, dirs, files in os.walk(self.models_path):
+        # Load Normalized models
+        for root, dirs, files in os.walk(self.normalized_model_path):
             len_files = len(files)
             if len(files) > 0:
                 for i in range(len_files):
                     file = files[i]
                     model_class = os.path.basename(os.path.normpath(root))
-                    path = os.path.join(self.models_path, model_class, file)
+                    path = os.path.join(self.normalized_model_path, model_class, file)
                     paths_to_load.append((path, model_class, file))
 
         # Use multiprocessing to parallelize the loading
@@ -138,6 +145,36 @@ class QueryScene(Scene):
         self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None,
                                                                              self.all_meshes[
                                                                                  self.current_model_name].centroid)
+
+        # Condition for poorly sampled shapes
+        condition = (((all_neighbors['Number of Faces'] < 100) | (all_neighbors['Number of Vertices'] < 100) |
+                      (all_neighbors['Number of Faces'] > 50000) | (all_neighbors['Number of Vertices'] > 50000)))
+        poorly_sampled = all_neighbors[condition]
+
+        # Resampling poorly sampled outliers
+        for _, outlier in tqdm(poorly_sampled.iterrows(), desc="Resampling outliers"):
+            name = outlier["Shape Name"]
+            model_class = outlier["Shape Class"]
+            bounding_box = return_bounding_box(name, None)
+            path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default',
+                                outlier['Shape Class'],
+                                name)
+            mesh = trimesh.load_mesh(path)
+
+            refined_mesh = resample(mesh, self.average_vertices)
+
+            self.refined.append(
+                (Model(self.app, name, refined_mesh), get_bb_lines(bounding_box),
+                 get_basis_lines(bounding_box, None),
+                 get_basis_lines(None, refined_mesh.centroid), name, model_class))
+
+            self.poorly_sampled.append(
+                (Model(self.app, name, mesh), get_bb_lines(bounding_box),
+                 get_basis_lines(bounding_box, None),
+                 get_basis_lines(None, mesh.centroid), name, model_class))
+
+        self.poorly_sampled = sorted(self.poorly_sampled, key=lambda x: x[5])
+        self.refined = sorted(self.refined, key=lambda x: x[5])
 
         self.current_class = self.all_classes[0]
         self.light = Light(
@@ -205,25 +242,72 @@ class QueryScene(Scene):
                                                              self.move_axes_to_barycenter)
             imgui.unindent(16)
 
+        # Step 2
         imgui.unindent(16)
-        # Add a combo box for classes
-        clicked, self.current_class_id = imgui.combo("Classes", self.current_class_id, self.all_classes)
-        if clicked:
-            self.current_class = self.all_classes[self.current_class_id]
+        imgui.spacing()
+        imgui.separator()
+        imgui.text("Step 2 - Outlier Resampling: ")
+        imgui.spacing()
+        imgui.indent(16)
+        clicked, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled Shapes",
+                                                           self.show_poorly_sampled)
 
-        # Add a combo box for models based on selected class
-        if self.current_class and self.current_class in self.all_model_names:
-            models_of_current_class = self.all_model_names[self.current_class]
-            clicked, self.current_model_id = imgui.combo("Models", self.current_model_id, models_of_current_class)
+        if self.show_poorly_sampled:
+            imgui.spacing()
+            imgui.indent(16)
+            imgui.text("Select Poorly Sampled Shape:")
+            _, self.selected_poorly_sampled = imgui.combo(" ",
+                                                          self.selected_poorly_sampled,
+                                                          [f"{shape[4]}({shape[5]})" for shape in self.poorly_sampled])
+            self.show_normalized = False
+
+            self.current_model_name = self.poorly_sampled[self.selected_poorly_sampled][4]
+            self.current_class = self.poorly_sampled[self.selected_poorly_sampled][5]
+            self.current_model = self.poorly_sampled[self.selected_poorly_sampled][0]
+            mesh = self.current_model.mesh
+
+            self.current_descriptor = self.all_descriptors[self.current_model_name]
+            self.all_bounding_boxes[self.current_model_name] = get_bb_lines(mesh.bounds)
+            self.all_basis_lines[self.current_model_name] = get_basis_lines(mesh.bounds, None)
+            self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
+
+        # Step 3
+        imgui.unindent(16)
+        if self.show_poorly_sampled:
+            imgui.unindent(16)
+        imgui.spacing()
+        imgui.separator()
+        imgui.text("Step 3 - Normalization: ")
+        imgui.spacing()
+        imgui.indent(16)
+
+        clicked, self.show_normalized = imgui.checkbox("Show Normalized Shapes", self.show_normalized)
+
+        if self.show_normalized:
+            imgui.text("Select Normalized Shape:")
+            imgui.spacing()
+            imgui.indent(16)
+            self.show_poorly_sampled = False
+            # Add a combo box for classes
+            clicked, self.current_class_id = imgui.combo("Classes", self.current_class_id, self.all_classes)
             if clicked:
-                self.current_model_name = models_of_current_class[self.current_model_id]
-                mesh = self.all_meshes[self.current_model_name]
-                self.current_model = Model(self.app, self.current_model_name, mesh)
-                self.current_descriptor = self.all_descriptors[self.current_model_name]
-                self.all_bounding_boxes[self.current_model_name] = get_bb_lines(
-                    self.all_meshes[self.current_model_name].bounds)
-                self.all_basis_lines[self.current_model_name] = get_basis_lines(
-                    self.all_meshes[self.current_model_name].bounds, None)
+                self.current_class = self.all_classes[self.current_class_id]
+
+            # Add a combo box for models based on selected class
+            if self.current_class and self.current_class in self.all_model_names:
+                models_of_current_class = self.all_model_names[self.current_class]
+                clicked, self.current_model_id = imgui.combo("Models", self.current_model_id,
+                                                             models_of_current_class)
+                if clicked:
+                    self.current_model_name = models_of_current_class[self.current_model_id]
+                    mesh = self.all_meshes[self.current_model_name]
+                    self.current_model = Model(self.app, self.current_model_name, mesh)
+                    self.current_descriptor = self.all_descriptors[self.current_model_name]
+                    self.all_bounding_boxes[self.current_model_name] = get_bb_lines(
+                        self.all_meshes[self.current_model_name].bounds)
+                    self.all_basis_lines[self.current_model_name] = get_basis_lines(
+                        self.all_meshes[self.current_model_name].bounds, None)
+                    self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
 
         imgui.spacing()
         imgui.separator()
@@ -243,6 +327,7 @@ class QueryScene(Scene):
             for name in matching_names:
                 self.all_bounding_boxes[name] = get_bb_lines(self.all_meshes[name].bounds)
                 self.all_basis_lines[name] = get_basis_lines(self.all_meshes[name].bounds, None)
+                self.all_barycenter_lines[name] = get_basis_lines(None, self.all_meshes[name].centroid)
 
         if imgui.button("Get Best-Matching Shapes (Step 5: ANN)"):
             neighbor_indexes, distances = self.index.query(
@@ -254,9 +339,16 @@ class QueryScene(Scene):
             matching_names = [list(self.all_descriptors.keys())[k] for k in neighbor_indexes.flatten().tolist()[1:]]
             self.best_matching_shapes = [(Model(self.app, name, self.all_meshes[name]), name) for name in
                                          matching_names]
+            for name in matching_names:
+                self.all_bounding_boxes[name] = get_bb_lines(self.all_meshes[name].bounds)
+                self.all_basis_lines[name] = get_basis_lines(self.all_meshes[name].bounds, None)
+                self.all_barycenter_lines[name] = get_basis_lines(None, self.all_meshes[name].centroid)
 
         if self.current_model != '':
             if imgui.begin("Descriptors", True):
+                imgui.text(f"Shape Class: {self.current_class}")
+                imgui.text(f"Number of Vertices: {len(self.all_meshes[self.current_model_name].vertices)}")
+                imgui.text(f"Number of Faces: {len(self.all_meshes[self.current_model_name].faces)}")
                 imgui.text("{}: {:.2f}".format("Surface area", self.current_descriptor.surface_area))
                 imgui.text("{}: {:.2f}".format("Compactness", self.current_descriptor.compactness))
                 imgui.text("{}: {:.2f}".format("Rectangularity", self.current_descriptor.rectangularity))
@@ -315,9 +407,9 @@ class QueryScene(Scene):
                         imgui.indent(16)
                         changed, self.selected_evaluation_subject = imgui.combo("",
                                                                                 self.selected_evaluation_subject,
-                                                                                ["Average"] + [shape_name for shape_name
-                                                                                               in
-                                                                                               self.shapes_per_class.keys()])
+                                                                                ["Average"] +
+                                                                                [shape_name for shape_name
+                                                                                 in self.shapes_per_class.keys()])
                     imgui.end()
 
         imgui.end()

@@ -66,7 +66,6 @@ def get_basis_lines(bounding_box: np.ndarray, barycenter: np.ndarray) -> list[tu
 
 def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
     """ Resamples a mesh to a specific target number of vertices. """
-    target_vertices = 1000
     while len(mesh.vertices) > target_vertices + THRESHOLD or len(mesh.vertices) < target_vertices - THRESHOLD:
         # If number of vertices is too high, simplify
         if len(mesh.vertices) > target_vertices + THRESHOLD:
@@ -207,10 +206,6 @@ def evaluate_query(
     precisions["Average"] = average_precision
     recalls["Average"] = average_recall
     f1_scores["Average"] = f1_score
-
-    print(average_precision)
-    print(average_recall)
-    print(f1_score)
 
     for shape_class in precisions.keys():
         precision_sum_recall = precisions[shape_class] + recalls[shape_class]

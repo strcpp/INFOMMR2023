@@ -1,9 +1,8 @@
-import csv
 from tqdm import tqdm
 import trimesh
 from multiprocessing import Pool, cpu_count
 from descriptor_extraction import *
-from display_statistics import return_neighbors, return_bounding_box
+from display_statistics import return_neighbors
 
 import pandas as pd
 
@@ -11,18 +10,19 @@ database_path = os.path.join('src', 'tools', 'outputs', 'database.csv')
 models_path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default')
 normalized_models_path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Normalized')
 
-THRESHOLD = 100
+THRESHOLD = 300
 
 
-def resample(mesh, target_faces):
-    while len(mesh.vertices) > target_faces + THRESHOLD or len(mesh.vertices) < target_faces - THRESHOLD:
+def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
+    """ Resamples a mesh to a specific target number of vertices. """
+    while len(mesh.vertices) > target_vertices + THRESHOLD or len(mesh.vertices) < target_vertices - THRESHOLD:
         # If number of vertices is too high, simplify
-        if len(mesh.vertices) > target_faces + THRESHOLD:
-            new_face_count = target_faces * (len(mesh.faces) / len(mesh.vertices))
+        if len(mesh.vertices) > target_vertices + THRESHOLD:
+            new_face_count = target_vertices * (len(mesh.faces) / len(mesh.vertices))
             mesh = mesh.simplify_quadratic_decimation(new_face_count)
 
         # If number of vertices is too low, subdivide
-        if len(mesh.vertices) < target_faces - THRESHOLD:
+        if len(mesh.vertices) < target_vertices - THRESHOLD:
             mesh = trimesh.Trimesh(*trimesh.remesh.subdivide(mesh.vertices, mesh.faces))
     return mesh
 
@@ -97,6 +97,7 @@ def main():
 
     average_model, _ = return_neighbors()
     average_mesh = next((m[0] for m in meshes if m[2] == average_model["Shape Name"]), None)
+
     target_faces = len(average_mesh.vertices)
 
     # Use multiprocessing to parallelize the processing
@@ -109,17 +110,17 @@ def main():
         data = {
             "Model Class": descriptor.model_class,
             "Model Name": descriptor.model_name,
-            "Surface Area": float(f"{descriptor.surface_area:.3f}"),
-            "Compactness": float(f"{descriptor.compactness:.3f}"),
-            "Rectangularity": float(f"{descriptor.rectangularity:.3f}"),
-            "Diameter": float(f"{descriptor.diameter:.3f}"),
-            "Convexity": float(f"{descriptor.convexity:.3f}"),
-            "Eccentricity": float(f"{descriptor.eccentricity:.3f}"),
-            "A3": [float(f"{x:.3f}") for x in descriptor.A3],
-            "D1": [float(f"{x:.3f}") for x in descriptor.D1],
-            "D2": [float(f"{x:.3f}") for x in descriptor.D2],
-            "D3": [float(f"{x:.3f}") for x in descriptor.D3],
-            "D4": [float(f"{x:.3f}") for x in descriptor.D4],
+            "Surface Area": round(descriptor.surface_area, 3),
+            "Compactness": round(descriptor.compactness, 3),
+            "Rectangularity": round(descriptor.rectangularity, 3),
+            "Diameter": round(descriptor.diameter, 3),
+            "Convexity": round(descriptor.convexity, 3),
+            "Eccentricity": round(descriptor.eccentricity, 3),
+            "A3": [round(x, 3) for x in descriptor.A3],
+            "D1": [round(x, 3) for x in descriptor.D1],
+            "D2": [round(x, 3) for x in descriptor.D2],
+            "D3": [round(x, 3) for x in descriptor.D3],
+            "D4": [round(x, 3) for x in descriptor.D4],
         }
         data_list.append(data)
 

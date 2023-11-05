@@ -35,18 +35,10 @@ def save_data(meshes, resample=True):
                                    'Type of Faces': 'Triangle',
                                    '3D Bounding Box': bounding_box})
     else:
-        # How many files to load from each class, usually to speed up devel
-        try:
-            with open('config.json', 'r') as file:
-                config = json.load(file)
-        except FileNotFoundError:
-            with open('../../config.json', 'r') as file:
-                config = json.load(file)
-
         # Iterate through all .obj files
         for root, dirs, files in tqdm(os.walk(models_path), desc="Parsing .obj files"):
             if len(files) > 0:
-                len_files = len(files) if config['len_files'] == 0 else config['len_files']
+                len_files = len(files)
 
                 for i in range(len_files):
                     file = files[i]

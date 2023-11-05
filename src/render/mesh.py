@@ -67,7 +67,7 @@ class Mesh:
         for root, dirs, files in tqdm(os.walk(models_path), desc="Reading .obj files"):
             # Only reading first file for now, otherwise startup is too slow
             if len(files) > 0:
-                len_files = len(files) if self.app.config['len_files'] == 0 else self.app.config['len_files']
+                len_files = len(files)
 
                 for i in range(len_files):
                     file = files[i]
