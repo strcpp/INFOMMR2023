@@ -176,7 +176,6 @@ class QueryScene(Scene):
         self.poorly_sampled = sorted(self.poorly_sampled, key=lambda x: x[5])
         self.refined = sorted(self.refined, key=lambda x: x[5])
 
-        self.current_class = self.all_classes[0]
         self.light = Light(
             position=Vector3([5., 5., 5.], dtype='f4'),
             color=Vector3([1.0, 1.0, 1.0], dtype='f4')
@@ -292,7 +291,15 @@ class QueryScene(Scene):
             clicked, self.current_class_id = imgui.combo("Classes", self.current_class_id, self.all_classes)
             if clicked:
                 self.current_class = self.all_classes[self.current_class_id]
-
+                self.current_model_name = self.all_model_names[self.current_class][0]
+                mesh = self.all_meshes[self.current_model_name]
+                self.current_model = Model(self.app, self.current_model_name, mesh)
+                self.current_descriptor = self.all_descriptors[self.current_model_name]
+                self.all_bounding_boxes[self.current_model_name] = get_bb_lines(
+                    self.all_meshes[self.current_model_name].bounds)
+                self.all_basis_lines[self.current_model_name] = get_basis_lines(
+                    self.all_meshes[self.current_model_name].bounds, None)
+                self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
             # Add a combo box for models based on selected class
             if self.current_class and self.current_class in self.all_model_names:
                 models_of_current_class = self.all_model_names[self.current_class]
@@ -309,60 +316,122 @@ class QueryScene(Scene):
                         self.all_meshes[self.current_model_name].bounds, None)
                     self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
 
-        imgui.spacing()
-        imgui.separator()
-        imgui.text("Query: ")
-        imgui.spacing()
-        imgui.indent(16)
+        if self.show_normalized:
+            imgui.unindent(16)
+            imgui.unindent(16)
+            imgui.spacing()
+            imgui.separator()
+            imgui.text("Steps 4-5: Query: ")
+            imgui.spacing()
+            imgui.indent(16)
 
-        _, self.neighbor_count = imgui.input_int("Number of Returned Shapes", self.neighbor_count)
+            _, self.neighbor_count = imgui.input_int("Number of Returned Shapes", self.neighbor_count)
 
-        if imgui.button("Get Best-Matching Shapes (Step 4)"):
-            matching_names, self.distances = get_best_matching_shapes(
-                self.all_descriptors[self.current_model_name],
-                {key: value for key, value in self.all_descriptors.items() if key != self.current_model_name},
-                self.neighbor_count)
-            self.best_matching_shapes = [(Model(self.app, name, self.all_meshes[name]), name) for name in
-                                         matching_names]
-            for name in matching_names:
-                self.all_bounding_boxes[name] = get_bb_lines(self.all_meshes[name].bounds)
-                self.all_basis_lines[name] = get_basis_lines(self.all_meshes[name].bounds, None)
-                self.all_barycenter_lines[name] = get_basis_lines(None, self.all_meshes[name].centroid)
+            if imgui.button("Get Best-Matching Shapes (Custom)"):
+                matching_names, self.distances = get_best_matching_shapes(
+                    self.all_descriptors[self.current_model_name],
+                    {key: value for key, value in self.all_descriptors.items() if key != self.current_model_name},
+                    self.neighbor_count)
+                self.best_matching_shapes = [(Model(self.app, name, self.all_meshes[name]), name) for name in
+                                             matching_names]
+                for name in matching_names:
+                    self.all_bounding_boxes[name] = get_bb_lines(self.all_meshes[name].bounds)
+                    self.all_basis_lines[name] = get_basis_lines(self.all_meshes[name].bounds, None)
+                    self.all_barycenter_lines[name] = get_basis_lines(None, self.all_meshes[name].centroid)
 
-        if imgui.button("Get Best-Matching Shapes (Step 5: ANN)"):
-            neighbor_indexes, distances = self.index.query(
-                np.array([self.all_descriptors[self.current_model_name].get_normalized_features()]),
-                k=self.neighbor_count + 1
-            )
+            if imgui.button("Get Best-Matching Shapes (ANN)"):
+                neighbor_indexes, distances = self.index.query(
+                    np.array([self.all_descriptors[self.current_model_name].get_normalized_features()]),
+                    k=self.neighbor_count + 1
+                )
 
-            self.distances = distances.flatten().tolist()[1:]
-            matching_names = [list(self.all_descriptors.keys())[k] for k in neighbor_indexes.flatten().tolist()[1:]]
-            self.best_matching_shapes = [(Model(self.app, name, self.all_meshes[name]), name) for name in
-                                         matching_names]
-            for name in matching_names:
-                self.all_bounding_boxes[name] = get_bb_lines(self.all_meshes[name].bounds)
-                self.all_basis_lines[name] = get_basis_lines(self.all_meshes[name].bounds, None)
-                self.all_barycenter_lines[name] = get_basis_lines(None, self.all_meshes[name].centroid)
+                self.distances = distances.flatten().tolist()[1:]
+                matching_names = [list(self.all_descriptors.keys())[k] for k in neighbor_indexes.flatten().tolist()[1:]]
+                self.best_matching_shapes = [(Model(self.app, name, self.all_meshes[name]), name) for name in
+                                             matching_names]
+                for name in matching_names:
+                    self.all_bounding_boxes[name] = get_bb_lines(self.all_meshes[name].bounds)
+                    self.all_basis_lines[name] = get_basis_lines(self.all_meshes[name].bounds, None)
+                    self.all_barycenter_lines[name] = get_basis_lines(None, self.all_meshes[name].centroid)
 
         if self.current_model != '':
+            imgui.set_next_window_position(420, 20, imgui.ONCE)
             if imgui.begin("Descriptors", True):
-                imgui.text(f"Shape Class: {self.current_class}")
-                imgui.text(f"Number of Vertices: {len(self.all_meshes[self.current_model_name].vertices)}")
-                imgui.text(f"Number of Faces: {len(self.all_meshes[self.current_model_name].faces)}")
-                imgui.text("{}: {:.2f}".format("Surface area", self.current_descriptor.surface_area))
-                imgui.text("{}: {:.2f}".format("Compactness", self.current_descriptor.compactness))
-                imgui.text("{}: {:.2f}".format("Rectangularity", self.current_descriptor.rectangularity))
-                imgui.text("{}: {:.2f}".format("Diameter", self.current_descriptor.diameter))
-                imgui.text("{}: {:.2f}".format("Convexity", self.current_descriptor.convexity))
-                imgui.text("{}: {:.2f}".format("Eccentricity", self.current_descriptor.eccentricity))
+                if self.show_poorly_sampled:
+                    imgui.columns(2, None, True)
+                    imgui.set_column_width(-1, 200)
+                    sample = self.poorly_sampled[self.selected_poorly_sampled]
+                    imgui.text(f"Shape Class: {sample[5]}")
+                    imgui.text(f"Number of Vertices: {len(sample[0].mesh.vertices)}")
+                    imgui.text(f"Number of Faces: {len(sample[0].mesh.faces)}")
+                    imgui.text("{}: {:.2f}".format("Surface area", self.all_descriptors[sample[4]].surface_area))
+                    imgui.text("{}: {:.2f}".format("Compactness", self.all_descriptors[sample[4]].compactness))
+                    imgui.text("{}: {:.2f}".format("Rectangularity",
+                                                   self.all_descriptors[sample[4]].rectangularity))
+                    imgui.text("{}: {:.2f}".format("Diameter", self.all_descriptors[sample[4]].diameter))
+                    imgui.text("{}: {:.2f}".format("Convexity", self.all_descriptors[sample[4]].convexity))
+                    imgui.text("{}: {:.2f}".format("Eccentricity", self.all_descriptors[sample[4]].eccentricity))
+                    imgui.text("")
+                    imgui.next_column()
+                    imgui.set_column_width(-1, 180)
+                    sample = self.refined[self.selected_poorly_sampled]
+                    imgui.text(f"Shae Class: {sample[5]}")
+                    imgui.text(f"Number of Vertices: {len(sample[0].mesh.vertices)}")
+                    imgui.text(f"Number of Faces: {len(sample[0].mesh.faces)}")
+                    imgui.text("{}: {:.2f}".format("Surface area", self.all_descriptors[sample[4]].surface_area))
+                    imgui.text("{}: {:.2f}".format("Compactness", self.all_descriptors[sample[4]].compactness))
+                    imgui.text("{}: {:.2f}".format("Rectangularity",
+                                                   self.all_descriptors[sample[4]].rectangularity))
+                    imgui.text("{}: {:.2f}".format("Diameter", self.all_descriptors[sample[4]].diameter))
+                    imgui.text("{}: {:.2f}".format("Convexity", self.all_descriptors[sample[4]].convexity))
+                    imgui.text("{}: {:.2f}".format("Eccentricity", self.all_descriptors[sample[4]].eccentricity))
+                    imgui.text("")
+                elif self.show_normalized:
+                    imgui.columns(4, None, True)
+                    aligned_shapes = [self.all_meshes[self.current_model_name].metadata['file_name']]
+                    aligned_distances = [0]
+                    for i in range(0, len(self.best_matching_shapes), 2):
+                        try:
+                            shape2 = self.best_matching_shapes[i + 1][1]
+                            aligned_shapes.insert(0, shape2)
+                            aligned_distances.insert(0, self.distances[i + 1])
+                        except IndexError:
+                            pass
+                        shape1 = self.best_matching_shapes[i][1]
+                        aligned_shapes.insert(len(aligned_shapes), shape1)
+                        aligned_distances.insert(len(aligned_shapes), self.distances[i])
 
-                if imgui.button("Save Distributions"):
-                    self.current_descriptor.save_A3_histogram_image()
-                    self.current_descriptor.save_D1_histogram_image()
-                    self.current_descriptor.save_D2_histogram_image()
-                    self.current_descriptor.save_D3_histogram_image()
-                    self.current_descriptor.save_D4_histogram_image()
-                imgui.text("")
+                    for i, shape in enumerate(aligned_shapes):
+                        imgui.set_column_width(-1, 280)
+                        current_class = ""
+                        for shape_class, shape_list in self.all_model_names.items():
+                            if shape in shape_list:
+                                current_class = shape_class
+                                break
+                        imgui.text(f"Shape Class: {current_class}")
+                        imgui.text(f"Number of Vertices: {len(self.all_meshes[shape].vertices)}")
+                        imgui.text(f"Number of Faces: {len(self.all_meshes[shape].faces)}")
+                        if len(aligned_distances) > 1:
+                            imgui.text(f"Distance to Query Shape: {round(aligned_distances[i], 3)}")
+                        imgui.text("{}: {:.2f}".format("Surface area", self.all_descriptors[shape].surface_area))
+                        imgui.text("{}: {:.2f}".format("Compactness", self.all_descriptors[shape].compactness))
+                        imgui.text("{}: {:.2f}".format("Rectangularity",
+                                                       self.all_descriptors[shape].rectangularity))
+                        imgui.text("{}: {:.2f}".format("Diameter", self.all_descriptors[shape].diameter))
+                        imgui.text("{}: {:.2f}".format("Convexity", self.all_descriptors[shape].convexity))
+                        imgui.text("{}: {:.2f}".format("Eccentricity", self.all_descriptors[shape].eccentricity))
+                        imgui.text("")
+                        imgui.next_column()
+                else:
+                    imgui.text(f"Shape Class: {self.current_class}")
+                    imgui.text(f"Number of Vertices: {len(self.all_meshes[self.current_model_name].vertices)}")
+                    imgui.text(f"Number of Faces: {len(self.all_meshes[self.current_model_name].faces)}")
+                    imgui.text("{}: {:.2f}".format("Surface area", self.current_descriptor.surface_area))
+                    imgui.text("{}: {:.2f}".format("Compactness", self.current_descriptor.compactness))
+                    imgui.text("{}: {:.2f}".format("Rectangularity", self.current_descriptor.rectangularity))
+                    imgui.text("{}: {:.2f}".format("Diameter", self.current_descriptor.diameter))
+                    imgui.text("{}: {:.2f}".format("Convexity", self.current_descriptor.convexity))
+                    imgui.text("{}: {:.2f}".format("Eccentricity", self.current_descriptor.eccentricity))
 
             # End the window
             imgui.end()
@@ -371,7 +440,7 @@ class QueryScene(Scene):
             imgui.unindent(16)
             imgui.spacing()
             imgui.separator()
-            imgui.text("Evaluation: ")
+            imgui.text("Step 6: Evaluation")
             imgui.spacing()
             imgui.indent(16)
             if imgui.button("Evaluate CBSR System"):
@@ -420,6 +489,11 @@ class QueryScene(Scene):
                                                                                  in self.shapes_per_class.keys()])
                     imgui.end()
 
+        if not self.show_normalized and not self.show_poorly_sampled:
+            self.current_model_name = self.average_model["Shape Name"]
+            self.current_model = Model(self.app, self.current_model_name, self.all_meshes[self.current_model_name])
+            self.current_class = self.average_model["Shape Class"]
+
         imgui.end()
         imgui.render()
 
@@ -455,12 +529,22 @@ class QueryScene(Scene):
         if self.current_model != '':
             draw_shape(self.current_model, self.current_model_name)
 
-            translation = 2
-            for match in self.best_matching_shapes:
-                draw_shape(match[0], match[1], translation)
-                translation *= -1
-                if translation > 0:
-                    translation += 2
+            if self.show_normalized:
+                translation = 2
+                for match in self.best_matching_shapes:
+                    draw_shape(match[0], match[1], translation)
+                    translation *= -1
+                    if translation > 0:
+                        translation += 2
+            elif self.show_poorly_sampled:
+                sample = self.refined[self.selected_poorly_sampled]
+                bb = sample[1]
+                x_coordinates = [point[0][0] for point in bb]
+                min_x = min(x_coordinates)
+                max_x = max(x_coordinates)
+                width = max_x - min_x
+                translation = width + 1
+                draw_shape(sample[0], sample[4], translation)
 
     def render(self) -> None:
         """

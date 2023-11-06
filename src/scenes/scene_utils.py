@@ -119,7 +119,7 @@ def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
     sorted_distances = sorted(distances.items(), key=lambda item: item[1])
     best_matching_shapes = [model_name for model_name, _ in sorted_distances[:num_neighbors]]
 
-    return best_matching_shapes, sorted_distances
+    return best_matching_shapes, [distance[1] for distance in distances.items()]
 
 
 def calculate_shapes_per_class(shapes: list[any]) -> dict[str, int]:
