@@ -10,7 +10,7 @@ database_path = os.path.join('src', 'tools', 'outputs', 'database.csv')
 models_path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default')
 normalized_models_path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Normalized')
 
-THRESHOLD = 300
+THRESHOLD = 500
 
 
 def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
@@ -67,8 +67,8 @@ def process_mesh(args):
     normalized_output_path = os.path.join(normalized_models_path, model_class)
     if not os.path.exists(normalized_output_path):
         os.makedirs(normalized_output_path)
-        mesh_path = os.path.join(normalized_output_path, model_name)
-        mesh.export(mesh_path, file_type="obj")
+    mesh_path = os.path.join(normalized_output_path, model_name)
+    mesh.export(mesh_path, file_type="obj")
 
     return descriptors
 

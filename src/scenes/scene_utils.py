@@ -6,7 +6,7 @@ from tools.descriptor_extraction import ShapeDescriptors
 from pynndescent import NNDescent
 from tqdm import tqdm
 
-THRESHOLD = 300
+THRESHOLD = 500
 
 
 def get_bb_lines(bounding_box: np.ndarray[float]) -> list[tuple[float, float]]:
@@ -93,28 +93,50 @@ def normalize_single_features(mesh_features: ShapeDescriptors) -> None:
         descriptor.normalize_single_features(standardized_features[i])
 
 
+def compute_compactness(mesh):
+    V = mesh.volume
+    A = mesh.area
+    return (A ** 3) / (V ** 2)
+
+
+def compute_rectangularity(mesh):
+    obb_volume = mesh.bounding_box_oriented.volume
+    return mesh.volume / obb_volume
+
+
+@njit
+def compute_diameter(vertices):
+    diameter = 0
+    for i in range(len(vertices)):
+        for j in range(i + 1, len(vertices)):
+            dist = np.linalg.norm(vertices[i] - vertices[j])
+            diameter = max(diameter, dist)
+    return diameter
+
+
+def compute_convexity(mesh):
+    return mesh.volume / mesh.convex_hull.volume
+
+
+def compute_eccentricity(mesh):
+    covariance_matrix = np.cov(np.transpose(mesh.vertices))
+    eigenvalues = np.linalg.eigvals(covariance_matrix)
+    return max(eigenvalues) / min(eigenvalues)
+
+
 @njit
 def euclidean_distance(x1: np.ndarray, x2: np.ndarray) -> float:
     """ Calculates the Euclidean distance of 2 features. """
     return np.sqrt(np.sum((x1 - x2) ** 2))
 
-from scipy.stats import wasserstein_distance
-
-
-
 
 def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
     distances = {}
     current_features = np.array(current_mesh.get_normalized_features())
-    #current_features2 = np.array(current_mesh.get_normalized_features2())
 
     for model_name, mesh in all_meshes.items():
         mesh_features = np.array(mesh.get_normalized_features())
         distances[model_name] = euclidean_distance(current_features, mesh_features)
-
-
-       # mesh_features = np.array(mesh.get_normalized_features2())
-        #distances[model_name] += euclidean_distance(current_features2, mesh_features)
 
     sorted_distances = sorted(distances.items(), key=lambda item: item[1])
     best_matching_shapes = [model_name for model_name, _ in sorted_distances[:num_neighbors]]
