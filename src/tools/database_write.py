@@ -124,10 +124,13 @@ def process_mesh(args):
 
     # Step 5: Export and Descriptors
     descriptors = ShapeDescriptors.from_mesh(mesh, model_class, model_name)  # assuming this is a predefined class
+    base_model_name, _ = os.path.splitext(model_name)
+
     normalized_output_path = os.path.join(normalized_models_path, model_class)
-    if not os.path.exists(normalized_output_path):
-        os.makedirs(normalized_output_path)
-    mesh_path = os.path.join(normalized_output_path, model_name)
+    os.makedirs(normalized_output_path, exist_ok=True)
+
+    # Construct the file path with the .obj extension explicitly added
+    mesh_path = os.path.join(normalized_output_path, f"{base_model_name}.obj")
     mesh.export(mesh_path, file_type="obj")
 
     return descriptors

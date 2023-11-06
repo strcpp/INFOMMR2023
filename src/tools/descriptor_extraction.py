@@ -4,7 +4,6 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import ast
-from pymeshfix import MeshFix
 import trimesh
 
 output_dir1 = "tools/outputs/histograms/descriptors"
