@@ -365,19 +365,19 @@ class ShapeDescriptors:
 
     def get_normalized_features(self):
 
-        return_list = [self.surface_area_normalized * 0.05,
-                       self.compactness_normalized * 0.05,
-                       self.rectangularity_normalized * 0.05,
-                       self.diameter_normalized * 0.05,
-                       self.convexity_normalized * 0.05,
-                       self.eccentricity_normalized * 0.05,
+        return_list = [self.surface_area_normalized * 0.025,
+                       self.compactness_normalized * 0.025,
+                       self.rectangularity_normalized * 0.025,
+                       self.diameter_normalized * 0.025,
+                       self.convexity_normalized * 0.025,
+                       self.eccentricity_normalized * 0.025,
                        ]
 
-        return_list.extend([x * 0.1 for x in self.A3])
-        return_list.extend([x * 0.15 for x in self.D1])
-        return_list.extend([x * 0.15 for x in self.D2])
-        return_list.extend([x * 0.15 for x in self.D3])
-        return_list.extend([x * 0.15 for x in self.D4])
+        return_list.extend([x * 0.17 for x in self.A3])
+        return_list.extend([x * 0.17 for x in self.D1])
+        return_list.extend([x * 0.17 for x in self.D2])
+        return_list.extend([x * 0.17 for x in self.D3])
+        return_list.extend([x * 0.17 for x in self.D4])
 
         return return_list
 
