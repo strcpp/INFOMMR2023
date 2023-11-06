@@ -9,7 +9,10 @@ import warnings
 try:
     from tools.descriptor_extraction import *
 except ModuleNotFoundError:
-    from descriptor_extraction import *
+    try:
+        from descriptor_extraction import *
+    except ModuleNotFoundError:
+        from src.tools.descriptor_extraction import *
 
 warnings.filterwarnings("ignore", category=RuntimeWarning)
 csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
@@ -52,17 +55,17 @@ def histogram(df, column_name, class_name, show):
             path = f"outputs/histograms/vertices/{class_name}"
             if not os.path.exists(path):
                 os.makedirs(path)
-            plt.savefig(f"outputs/histograms/vertices/{class_name}/vertices_{class_name}")
+            plt.savefig(f"outputs/histograms/vertices/{class_name}/vertices_{class_name}_normalized")
         else:
-            plt.savefig(f"outputs/histograms/vertices/All/all_shapes")
+            plt.savefig(f"outputs/histograms/vertices/All/all_shapes_normalized")
     else:
         if class_name:
             path = f"outputs/histograms/faces/{class_name}"
             if not os.path.exists(path):
                 os.makedirs(path)
-            plt.savefig(f"outputs/histograms/faces/{class_name}/faces_{class_name}")
+            plt.savefig(f"outputs/histograms/faces/{class_name}/faces_{class_name}_normalized")
         else:
-            plt.savefig(f"outputs/histograms/faces/All/all_shapes")
+            plt.savefig(f"outputs/histograms/faces/All/all_shapes_normalized")
 
     if show:
         plt.show()
@@ -112,10 +115,10 @@ def save_histograms(show_histogram):
         df = pd.read_csv(csv_file_path, delimiter=';')
     except FileNotFoundError:
         try:
-            new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
+            new_path = os.path.join('tools', 'outputs', 'shape_data_normalized.csv')
             df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
         except FileNotFoundError:
-            new_path = os.path.join('outputs', 'shape_data.csv')
+            new_path = os.path.join('outputs', 'shape_data_normalized.csv')
             df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
     # Display histogram for the number of vertices
@@ -138,6 +141,8 @@ def save_histograms(show_histogram):
 
         if show_histogram:
             time.sleep(2)
+
+save_histograms(False)
 
 
 def return_bounding_box(model_name, mesh):

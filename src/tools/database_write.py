@@ -108,7 +108,6 @@ def process_mesh(args):
     barycenter = mesh.centroid
     mesh.apply_translation(-barycenter)
 
-
     # Step 3: Pose (alignment)
     covariance_matrix = np.cov(mesh.vertices.T)
     eig_values, eig_vectors = np.linalg.eig(covariance_matrix)

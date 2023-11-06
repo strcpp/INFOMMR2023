@@ -359,7 +359,7 @@ class QueryScene(Scene):
 
         if self.current_model != '':
             imgui.set_next_window_position(420, 20, imgui.ONCE)
-            if imgui.begin("Descriptors", True):
+            if imgui.begin("Info", True):
                 if self.show_poorly_sampled:
                     imgui.columns(2, None, True)
                     imgui.set_column_width(-1, 250)
@@ -373,7 +373,6 @@ class QueryScene(Scene):
                     sample = self.refined[self.selected_poorly_sampled]
                     imgui.text(f"Shape Class: {sample[5]}")
                     mesh = sample[0].mesh
-                    descriptors = sample[6]
                     imgui.text(f"Number of Vertices: {len(mesh.vertices)}")
                     imgui.text(f"Number of Faces: {len(mesh.faces)}")
                     imgui.text("")

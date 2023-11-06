@@ -3,7 +3,6 @@ from numba import njit
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
-import ast
 import trimesh
 
 output_dir1 = "tools/outputs/histograms/descriptors"
@@ -13,6 +12,7 @@ np.random.seed(42)
 
 SAMPLE_SIZE = 1000
 BIN_SIZE = 10
+
 
 def calculate_mesh_volume(mesh):
     # # Attempt to fix the mesh using pymeshfix
