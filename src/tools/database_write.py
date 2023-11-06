@@ -27,48 +27,107 @@ def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
     return mesh
 
 
+def align_to_largest_extent_component(mesh):
+    extents = mesh.extents
+    max_extent_direction = mesh.vertices.max(axis=0) - mesh.vertices.min(axis=0)
+    major_axis_index = np.argmax(extents)
+    major_axis_sign = np.sign(max_extent_direction[major_axis_index])
+    
+    # Ensure the major axis points in the positive direction
+    if major_axis_sign < 0:
+        mesh.vertices[:, major_axis_index] *= -1  # This flips the mesh along the major axis
+
+    return mesh
+
+def align_mesh_axes(eig_vectors):
+    # Reorder eigenvectors: longest axis (major) aligns with X-axis, shortest (minor) with Y-axis.
+    # The cross product ensures that the resulting system is right-handed.
+    major_axis_vector = eig_vectors[:, 2]  # longest axis - X
+    minor_axis_vector = eig_vectors[:, 0]  # shortest axis - Y
+    medium_axis_vector = np.cross(minor_axis_vector, major_axis_vector)  # cross product - Z
+    
+    # Now we construct the new orientation matrix such that each column is an axis vector
+    new_orientation = np.column_stack((major_axis_vector, minor_axis_vector, medium_axis_vector))
+    
+    # Ensure the matrix is a proper rotation matrix by checking its determinant
+    if np.linalg.det(new_orientation) < 0:
+        new_orientation[:, 1] = -new_orientation[:, 1]  # invert Y if we don't have a right-handed system
+    
+    return new_orientation
+
+def align_mesh_axes(eig_vectors, eig_values, vertices):
+    # Sort eigenvalues and eigenvectors by the magnitude of the eigenvalues (major to minor)
+    sort_idx = np.argsort(-eig_values)
+    eig_vectors = eig_vectors[:, sort_idx]
+
+    # Project the vertices onto the eigenvectors to find their extents
+    projected_vertices = vertices @ eig_vectors
+    min_extents = projected_vertices.min(axis=0)
+    max_extents = projected_vertices.max(axis=0)
+    extents = max_extents - min_extents
+
+    # The axis with the largest extent should be aligned with the X-axis
+    # The axis with the smallest extent should be aligned with the Y-axis
+    axis_order = np.argsort(-extents)  # Sort axes by extent in descending order
+
+    # Create a new set of eigenvectors with the correct order
+    aligned_eig_vectors = eig_vectors[:, axis_order]
+
+    # Ensure right-handed coordinate system
+    cross_product = np.cross(aligned_eig_vectors[:, 0], aligned_eig_vectors[:, 1])
+    if np.dot(cross_product, aligned_eig_vectors[:, 2]) < 0:
+        aligned_eig_vectors[:, 2] = -aligned_eig_vectors[:, 2]
+
+    return aligned_eig_vectors
+
+def align_mesh(mesh, eig_vectors):
+    # Apply the rotation to align the mesh with the new axes
+    mesh.vertices = mesh.vertices @ eig_vectors
+
+    # Ensure the axes are pointing in the positive direction based on the vertices' positions
+    for i in range(3):
+        if mesh.vertices[:, i].mean() < 0:
+            mesh.vertices[:, i] = -mesh.vertices[:, i]
+
+    return mesh
+
+
 def process_mesh(args):
-    m, target_faces = args  # unpack the tuple here
+    m, target_faces = args
     model_class = m[1]
     model_name = m[2]
     mesh = m[0]
 
     # Step 1: Resample
+    # Assuming 'resample' is a function defined elsewhere that you've imported
     mesh.process()
     mesh.remove_duplicate_faces()
     mesh = resample(mesh, target_faces)
 
-    # Step 2: Translation
+   # Step 2: Translation
     barycenter = mesh.centroid
     mesh.apply_translation(-barycenter)
 
+
     # Step 3: Pose (alignment)
-    covariance_matrix = np.cov(np.transpose(mesh.vertices))
+    covariance_matrix = np.cov(mesh.vertices.T)
     eig_values, eig_vectors = np.linalg.eig(covariance_matrix)
-    sorted_indices = np.argsort(eig_values)[::-1]
-    major = eig_vectors[:, sorted_indices[0]]
-    medium = eig_vectors[:, sorted_indices[1]]
-    minor = np.cross(major, medium)
+    sorted_indices = np.argsort(-eig_values)
+    eig_vectors = eig_vectors[:, sorted_indices]
+    aligned_eig_vectors = align_mesh_axes(eig_vectors, eig_values, mesh.vertices)
+    mesh = align_mesh(mesh, aligned_eig_vectors)
 
-    dot_product = np.dot(mesh.vertices, np.array([major, medium, minor]))
-
-    mesh = trimesh.Trimesh(dot_product, mesh.faces)
-
-    # Step 4: Orientation
-    f = np.sum(np.sign(mesh.triangles_center) * (np.square(mesh.triangles_center)))
-    mesh = trimesh.Trimesh((mesh.vertices * np.sign(f)), mesh.faces)
-
-    # Step 5: Size
+    # Step 4: Scale
     max_dimension = max(mesh.extents)
     scale_factor = 1.0 / max_dimension
     mesh.apply_scale(scale_factor)
-    descriptors = ShapeDescriptors.from_mesh(mesh, model_class, model_name)
 
+    # Step 5: Export and Descriptors
+    descriptors = ShapeDescriptors.from_mesh(mesh, model_class, model_name)  # assuming this is a predefined class
     normalized_output_path = os.path.join(normalized_models_path, model_class)
-    if not os.path.exists(normalized_output_path):
-        os.makedirs(normalized_output_path)
-        mesh_path = os.path.join(normalized_output_path, model_name)
-        mesh.export(mesh_path, file_type="obj")
+    os.makedirs(normalized_output_path, exist_ok=True)
+    mesh_path = os.path.join(normalized_output_path, f"{model_name}.obj")
+    mesh.export(mesh_path, file_type="obj")
 
     return descriptors
 
