@@ -15,8 +15,9 @@ import numpy as np
 from tools.descriptor_extraction import *
 from numba import njit
 from multiprocessing import Pool, cpu_count
-from scenes.scene_utils import euclidean_distance, get_bb_lines, get_basis_lines, evaluate_query, get_best_matching_shapes, resample
+from scenes.scene_utils import *
 import pynndescent
+import pandas as pd
 
 
 def normalize_single_features(mesh_features):
@@ -146,10 +147,12 @@ class QueryScene(Scene):
                                                                              self.all_meshes[
                                                                                  self.current_model_name].centroid)
 
-        # Condition for poorly sampled shapes
-        condition = (((all_neighbors['Number of Faces'] < 100) | (all_neighbors['Number of Vertices'] < 100) |
-                      (all_neighbors['Number of Faces'] > 50000) | (all_neighbors['Number of Vertices'] > 50000)))
-        poorly_sampled = all_neighbors[condition][:1]
+        # Conditions for poorly sampled shapes
+        condition_low = (all_neighbors['Number of Vertices'] < 100)
+        condition_high = (all_neighbors['Number of Vertices'] > 50000)
+
+        # Use 5 shapes with less than 100 faces/vertices and 5 shapes with more than 50000 faces/vertices
+        poorly_sampled = pd.concat([all_neighbors[condition_low].head(4), all_neighbors[condition_high].head(4)])
 
         # Resampling poorly sampled outliers
         for _, outlier in tqdm(poorly_sampled.iterrows(), desc="Resampling outliers"):
@@ -166,7 +169,13 @@ class QueryScene(Scene):
             self.refined.append(
                 (Model(self.app, name, refined_mesh), get_bb_lines(bounding_box),
                  get_basis_lines(bounding_box, None),
-                 get_basis_lines(None, refined_mesh.centroid), name, model_class))
+                 get_basis_lines(None, refined_mesh.centroid), name, model_class,
+                 (round(refined_mesh.area, 3),
+                  round(compute_compactness(refined_mesh), 3),
+                  round(compute_rectangularity(refined_mesh), 3),
+                  round(compute_diameter(refined_mesh.vertices), 3),
+                  round(compute_convexity(refined_mesh), 3),
+                  round(compute_eccentricity(refined_mesh), 3))))
 
             self.poorly_sampled.append(
                 (Model(self.app, name, mesh), get_bb_lines(bounding_box),
@@ -359,32 +368,20 @@ class QueryScene(Scene):
             if imgui.begin("Descriptors", True):
                 if self.show_poorly_sampled:
                     imgui.columns(2, None, True)
-                    imgui.set_column_width(-1, 200)
+                    imgui.set_column_width(-1, 250)
                     sample = self.poorly_sampled[self.selected_poorly_sampled]
                     imgui.text(f"Shape Class: {sample[5]}")
                     imgui.text(f"Number of Vertices: {len(sample[0].mesh.vertices)}")
                     imgui.text(f"Number of Faces: {len(sample[0].mesh.faces)}")
-                    imgui.text("{}: {:.2f}".format("Surface area", self.all_descriptors[sample[4]].surface_area))
-                    imgui.text("{}: {:.2f}".format("Compactness", self.all_descriptors[sample[4]].compactness))
-                    imgui.text("{}: {:.2f}".format("Rectangularity",
-                                                   self.all_descriptors[sample[4]].rectangularity))
-                    imgui.text("{}: {:.2f}".format("Diameter", self.all_descriptors[sample[4]].diameter))
-                    imgui.text("{}: {:.2f}".format("Convexity", self.all_descriptors[sample[4]].convexity))
-                    imgui.text("{}: {:.2f}".format("Eccentricity", self.all_descriptors[sample[4]].eccentricity))
                     imgui.text("")
                     imgui.next_column()
-                    imgui.set_column_width(-1, 180)
+                    imgui.set_column_width(-1, 250)
                     sample = self.refined[self.selected_poorly_sampled]
-                    imgui.text(f"Shae Class: {sample[5]}")
-                    imgui.text(f"Number of Vertices: {len(sample[0].mesh.vertices)}")
-                    imgui.text(f"Number of Faces: {len(sample[0].mesh.faces)}")
-                    imgui.text("{}: {:.2f}".format("Surface area", self.all_descriptors[sample[4]].surface_area))
-                    imgui.text("{}: {:.2f}".format("Compactness", self.all_descriptors[sample[4]].compactness))
-                    imgui.text("{}: {:.2f}".format("Rectangularity",
-                                                   self.all_descriptors[sample[4]].rectangularity))
-                    imgui.text("{}: {:.2f}".format("Diameter", self.all_descriptors[sample[4]].diameter))
-                    imgui.text("{}: {:.2f}".format("Convexity", self.all_descriptors[sample[4]].convexity))
-                    imgui.text("{}: {:.2f}".format("Eccentricity", self.all_descriptors[sample[4]].eccentricity))
+                    imgui.text(f"Shape Class: {sample[5]}")
+                    mesh = sample[0].mesh
+                    descriptors = sample[6]
+                    imgui.text(f"Number of Vertices: {len(mesh.vertices)}")
+                    imgui.text(f"Number of Faces: {len(mesh.faces)}")
                     imgui.text("")
                 elif self.show_normalized:
                     imgui.columns(4, None, True)
@@ -420,6 +417,12 @@ class QueryScene(Scene):
                         imgui.text("{}: {:.2f}".format("Diameter", self.all_descriptors[shape].diameter))
                         imgui.text("{}: {:.2f}".format("Convexity", self.all_descriptors[shape].convexity))
                         imgui.text("{}: {:.2f}".format("Eccentricity", self.all_descriptors[shape].eccentricity))
+                        if imgui.button("Save Distributions"):
+                            self.all_descriptors[shape].save_A3_histogram_image()
+                            self.all_descriptors[shape].save_D1_histogram_image()
+                            self.all_descriptors[shape].save_D2_histogram_image()
+                            self.all_descriptors[shape].save_D3_histogram_image()
+                            self.all_descriptors[shape].save_D4_histogram_image()
                         imgui.text("")
                         imgui.next_column()
                 else:

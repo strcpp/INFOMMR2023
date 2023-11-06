@@ -192,9 +192,7 @@ class ShapeDescriptors:
         return a3
 
     def save_A3_histogram_image(self):
-        a3 = self.A3
-
-        histogram, bin_edges = np.histogram(a3, bins=self.bin_size, range=(0, np.pi))
+        histogram = self.A3
 
         fig, ax = plt.subplots(figsize=(10, 6))
         bin_edges = np.linspace(0, np.pi, len(histogram) + 1)
@@ -202,7 +200,7 @@ class ShapeDescriptors:
         ax.bar(bin_centers, histogram, width=np.pi / len(histogram), align='center', edgecolor='black')
         ax.set_xlabel('Angle (radians)')
         ax.set_ylabel('Frequency')
-        ax.set_title('Angle between 3 random vertices')
+        ax.set_title('Angle Between 3 Random Vertices')
         ax.set_xlim(0, np.pi)
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
@@ -234,15 +232,16 @@ class ShapeDescriptors:
         return d1
 
     def save_D1_histogram_image(self):
-        d1 = self.D1
-        histogram, bin_edges = np.histogram(d1, bins=self.bin_size)
-        self.D1 = [x / np.sum(histogram) for x in histogram]
+        histogram = self.D1
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.hist(d1, bins=self.bin_size, edgecolor='black')
+        bin_edges = np.linspace(0, np.pi, len(histogram) + 1)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        ax.bar(bin_centers, histogram, width=np.pi / len(histogram), align='center', edgecolor='black')
         ax.set_xlabel('Distance')
         ax.set_ylabel('Frequency')
-        ax.set_title('Distancce between barycenter and random vertex')
+        ax.set_title('Distance Between Barycenter and Eandom Vertex')
+        ax.set_xlim(0, np.pi)
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
@@ -270,14 +269,16 @@ class ShapeDescriptors:
         return d2
 
     def save_D2_histogram_image(self):
-        d2 = self.D2
-        histogram, bin_edges = np.histogram(d2, bins=self.bin_size)
-        self.D2 = [x / np.sum(histogram) for x in histogram]
+        histogram = self.D2
+
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.hist(d2, bins=self.bin_size, edgecolor='black')
+        bin_edges = np.linspace(0, np.pi, len(histogram) + 1)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        ax.bar(bin_centers, histogram, width=np.pi / len(histogram), align='center', edgecolor='black')
         ax.set_xlabel('Distance')
         ax.set_ylabel('Frequency')
-        ax.set_title('Distance between 2 random vertices')
+        ax.set_title('Distance Between 2 Random Vertices')
+        ax.set_xlim(0, np.pi)
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
@@ -311,27 +312,21 @@ class ShapeDescriptors:
             try:
                 histogram, bin_edges = np.histogram(areas, bins=BIN_SIZE)
             except ValueError:
-                print(a)
-                print(b)
-                print(c)
-                print(s)
-                print(s * (s - a) * (s - b) * (s - c))
-                print(area)
                 raise ValueError
         d3 = [x / np.sum(histogram) for x in histogram]
         return d3
 
     def save_D3_histogram_image(self):
-        d3 = self.D3
-
-        histogram, bin_edges = np.histogram(d3, bins=self.bin_size)
-        self.D3 = [x / np.sum(histogram) for x in histogram]
+        histogram = self.D3
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.hist(d3, bins=self.bin_size, edgecolor='black')
+        bin_edges = np.linspace(0, np.pi, len(histogram) + 1)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        ax.bar(bin_centers, histogram, width=np.pi / len(histogram), align='center', edgecolor='black')
         ax.set_xlabel('Square Root of Area')
         ax.set_ylabel('Frequency')
-        ax.set_title('Square root of area of triangle given by 3 random vertices')
+        ax.set_title('Square Root of Area of Triangle Given by 3 Random Vertices')
+        ax.set_xlim(0, np.pi)
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
@@ -363,16 +358,16 @@ class ShapeDescriptors:
         return d4
 
     def save_D4_histogram_image(self):
-        d4 = self.D4
-
-        histogram, bin_edges = np.histogram(d4, bins=self.bin_size)
-        self.D4 = [x / np.sum(histogram) for x in histogram]
+        histogram = self.D4
 
         fig, ax = plt.subplots(figsize=(10, 6))
-        ax.hist(d4, bins=self.bin_size, edgecolor='black')
-        ax.set_xlabel('Cube Root of Volume')
+        bin_edges = np.linspace(0, np.pi, len(histogram) + 1)
+        bin_centers = (bin_edges[:-1] + bin_edges[1:]) / 2
+        ax.bar(bin_centers, histogram, width=np.pi / len(histogram), align='center', edgecolor='black')
+        ax.set_xlabel('Cube Root of Area')
         ax.set_ylabel('Frequency')
-        ax.set_title('Cube root of volume of tetrahedron formed by 4 random vertices')
+        ax.set_title('Cube Root of Volume of Tetrahedron Formed by 4 Random Vertices')
+        ax.set_xlim(0, np.pi)
         ax.grid(True, which='both', linestyle='--', linewidth=0.5)
         plt.tight_layout()
 
@@ -395,29 +390,19 @@ class ShapeDescriptors:
 
     def get_normalized_features(self):
 
-        return_list = [self.surface_area_normalized * 0.025,
-                       self.compactness_normalized * 0.025,
-                       self.rectangularity_normalized * 0.025,
-                       self.diameter_normalized * 0.025,
-                       self.convexity_normalized * 0.025,
-                       self.eccentricity_normalized * 0.025,
+        return_list = [self.surface_area_normalized * 0.015,
+                       self.compactness_normalized * 0.015,
+                       self.rectangularity_normalized * 0.015,
+                       self.diameter_normalized * 0.015,
+                       self.convexity_normalized * 0.015,
+                       self.eccentricity_normalized * 0.015,
                        ]
 
-        return_list.extend([x * 0.17 for x in self.A3])
-        return_list.extend([x * 0.17 for x in self.D1])
-        return_list.extend([x * 0.17 for x in self.D2])
-        return_list.extend([x * 0.17 for x in self.D3])
-        return_list.extend([x * 0.17 for x in self.D4])
-
-        return return_list
-
-    def get_normalized_features2(self):
-        return_list = []
-        return_list.extend(self.A3)
-        return_list.extend(self.D1)
-        return_list.extend(self.D2)
-        return_list.extend(self.D3)
-        return_list.extend(self.D4)
+        return_list.extend([x * 0.182 for x in self.A3])
+        return_list.extend([x * 0.182 for x in self.D1])
+        return_list.extend([x * 0.182 for x in self.D2])
+        return_list.extend([x * 0.182 for x in self.D3])
+        return_list.extend([x * 0.182 for x in self.D4])
 
         return return_list
 

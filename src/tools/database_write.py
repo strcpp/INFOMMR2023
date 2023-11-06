@@ -10,7 +10,7 @@ database_path = os.path.join('src', 'tools', 'outputs', 'database.csv')
 models_path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default')
 normalized_models_path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Normalized')
 
-THRESHOLD = 300
+THRESHOLD = 500
 
 
 def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
@@ -125,8 +125,9 @@ def process_mesh(args):
     # Step 5: Export and Descriptors
     descriptors = ShapeDescriptors.from_mesh(mesh, model_class, model_name)  # assuming this is a predefined class
     normalized_output_path = os.path.join(normalized_models_path, model_class)
-    os.makedirs(normalized_output_path, exist_ok=True)
-    mesh_path = os.path.join(normalized_output_path, f"{model_name}.obj")
+    if not os.path.exists(normalized_output_path):
+        os.makedirs(normalized_output_path)
+    mesh_path = os.path.join(normalized_output_path, model_name)
     mesh.export(mesh_path, file_type="obj")
 
     return descriptors
