@@ -186,7 +186,7 @@ def return_shape_descriptor(model_name, mesh):
 def return_shape_descriptors(all_model_names, all_meshes):
     # Attempt to read the CSV file from the default path
     try:
-        df = pd.read_csv(os.path.join(os.getcwd(), database_file_path))
+        df = pd.read_csv(os.path.join(os.getcwd(), database_file_path), delimiter=';')
     except FileNotFoundError:
         # If not found, try to read it from the alternative path
         new_path = os.path.join('tools', 'outputs', 'database.csv')

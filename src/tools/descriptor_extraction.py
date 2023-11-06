@@ -4,6 +4,8 @@ import matplotlib.pyplot as plt
 import os
 import pandas as pd
 import ast
+from pymeshfix import MeshFix
+import trimesh
 
 output_dir1 = "tools/outputs/histograms/descriptors"
 output_dir2 = "src/tools/outputs/histograms/descriptors"
@@ -12,6 +14,31 @@ np.random.seed(42)
 
 SAMPLE_SIZE = 1000
 BIN_SIZE = 10
+
+def calculate_mesh_volume(mesh):
+    # # Attempt to fix the mesh using pymeshfix
+    # mfix = MeshFix(mesh.vertices, mesh.faces)
+    # mfix.repair()
+    # fixed_mesh = mfix.mesh
+
+    # print(fixed_mesh)
+    # # Convert fixed_mesh back to a trimesh.Trimesh object if necessary
+    # mesh = trimesh.Trimesh(vertices=fixed_mesh.v, faces=fixed_mesh.f)
+
+    # # Check if the mesh is watertight after repair
+    if not mesh.is_watertight:
+        mesh.fill_holes()
+
+    # Calculate the volume using the watertight mesh
+    reference_point = mesh.centroid
+    volumes = []
+    for face in mesh.faces:
+        v0, v1, v2 = mesh.vertices[face]
+        tetra_volume = np.dot(reference_point - v0, np.cross(v1 - v0, v2 - v0)) / 6.0
+        volumes.append(tetra_volume)
+
+    volume = np.abs(sum(volumes))
+    return volume
 
 
 class ShapeDescriptors:
@@ -91,10 +118,13 @@ class ShapeDescriptors:
     def from_mesh(cls, mesh, model_class, model_name):
         model_name, _ = os.path.splitext(model_name)
         surface_area = mesh.area
-        compactness = cls.compute_compactness(mesh)
-        rectangularity = cls.compute_rectangularity(mesh)
+
+        volume = calculate_mesh_volume(mesh)
+
+        compactness = cls.compute_compactness(mesh, volume)
+        rectangularity = cls.compute_rectangularity(mesh, volume)
         diameter = cls.compute_diameter(mesh.convex_hull.vertices)
-        convexity = cls.compute_convexity(mesh)
+        convexity = cls.compute_convexity(mesh, volume)
         eccentricity = cls.compute_eccentricity(mesh)
         A3 = cls.compute_A3(mesh, SAMPLE_SIZE)
         D1 = cls.compute_D1(mesh, SAMPLE_SIZE)
@@ -119,14 +149,14 @@ class ShapeDescriptors:
             D4=D4
         )
 
-    def compute_compactness(mesh):
-        V = mesh.volume
+    def compute_compactness(mesh, volume):
+        V = volume
         A = mesh.area
         return (A ** 3) / (V ** 2)
 
-    def compute_rectangularity(mesh):
+    def compute_rectangularity(mesh, volume):
         obb_volume = mesh.bounding_box_oriented.volume
-        return mesh.volume / obb_volume
+        return volume / obb_volume
 
     @staticmethod
     @njit
@@ -138,8 +168,8 @@ class ShapeDescriptors:
                 diameter = max(diameter, dist)
         return diameter
 
-    def compute_convexity(mesh):
-        return mesh.volume / mesh.convex_hull.volume
+    def compute_convexity(mesh, volume):
+        return volume / mesh.convex_hull.volume
 
     def compute_eccentricity(mesh):
         covariance_matrix = np.cov(np.transpose(mesh.vertices))
