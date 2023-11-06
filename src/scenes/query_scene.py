@@ -169,13 +169,7 @@ class QueryScene(Scene):
             self.refined.append(
                 (Model(self.app, name, refined_mesh), get_bb_lines(bounding_box),
                  get_basis_lines(bounding_box, None),
-                 get_basis_lines(None, refined_mesh.centroid), name, model_class,
-                 (round(refined_mesh.area, 3),
-                  round(compute_compactness(refined_mesh), 3),
-                  round(compute_rectangularity(refined_mesh), 3),
-                  round(compute_diameter(refined_mesh.vertices), 3),
-                  round(compute_convexity(refined_mesh), 3),
-                  round(compute_eccentricity(refined_mesh), 3))))
+                 get_basis_lines(None, refined_mesh.centroid), name, model_class))
 
             self.poorly_sampled.append(
                 (Model(self.app, name, mesh), get_bb_lines(bounding_box),

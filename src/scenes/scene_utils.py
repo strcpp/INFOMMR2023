@@ -93,37 +93,6 @@ def normalize_single_features(mesh_features: ShapeDescriptors) -> None:
         descriptor.normalize_single_features(standardized_features[i])
 
 
-def compute_compactness(mesh):
-    V = mesh.volume
-    A = mesh.area
-    return (A ** 3) / (V ** 2)
-
-
-def compute_rectangularity(mesh):
-    obb_volume = mesh.bounding_box_oriented.volume
-    return mesh.volume / obb_volume
-
-
-@njit
-def compute_diameter(vertices):
-    diameter = 0
-    for i in range(len(vertices)):
-        for j in range(i + 1, len(vertices)):
-            dist = np.linalg.norm(vertices[i] - vertices[j])
-            diameter = max(diameter, dist)
-    return diameter
-
-
-def compute_convexity(mesh):
-    return mesh.volume / mesh.convex_hull.volume
-
-
-def compute_eccentricity(mesh):
-    covariance_matrix = np.cov(np.transpose(mesh.vertices))
-    eigenvalues = np.linalg.eigvals(covariance_matrix)
-    return max(eigenvalues) / min(eigenvalues)
-
-
 @njit
 def euclidean_distance(x1: np.ndarray, x2: np.ndarray) -> float:
     """ Calculates the Euclidean distance of 2 features. """
