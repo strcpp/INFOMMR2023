@@ -13,3 +13,4 @@ trimesh
 pywavefront
 open3d
 pynndescent
+mplcursors

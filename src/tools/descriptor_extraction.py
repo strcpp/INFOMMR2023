@@ -82,15 +82,6 @@ class ShapeDescriptors:
         convexity = row['Convexity'].iloc[0] if not pd.isnull(row['Convexity'].iloc[0]) else 0.0
         eccentricity = row['Eccentricity'].iloc[0] if not pd.isnull(row['Eccentricity'].iloc[0]) else 0.0
 
-        test = row['A3'].values[0]
-
-        # Remove the square brackets and split the string into a list of strings
-        data_str = test[1:-1]  # Remove square brackets
-        numbers = data_str.split(', ')  # Split the string using ', ' as the separator
-
-        # Convert the list of strings to a list of floats
-        data = [float(num) for num in numbers]
-
         A3 = [float(num) for num in row['A3'].values[0][1:-1].split(', ')]
         D1 = [float(num) for num in row['D1'].values[0][1:-1].split(', ')]
         D2 = [float(num) for num in row['D2'].values[0][1:-1].split(', ')]

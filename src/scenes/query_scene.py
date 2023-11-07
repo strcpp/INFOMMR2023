@@ -443,7 +443,7 @@ class QueryScene(Scene):
                 model_names = [name for name in self.all_descriptors]
 
                 reduced_features = TSNE(
-                    n_components=2, learning_rate='auto', init='random', perplexity=15, n_jobs=-1
+                    n_components=2, learning_rate='auto', init='random', perplexity=15, n_jobs=-1, random_state=42
                 ).fit_transform(np.array([mesh.get_normalized_features() for _, mesh in self.all_descriptors.items()]))
 
                 unique_classes = list(set(self.all_classes))
@@ -477,10 +477,6 @@ class QueryScene(Scene):
                 cursor = mplcursors.cursor(hover=True)
                 cursor.connect("add", lambda sel: sel.annotation.set_text(
                     f"Class: {model_classes[sel.target.index]}\nName: {model_names[sel.target.index]}"))
-
-                # Toggle full screen mode
-                manager = plt.get_current_fig_manager()
-                manager.full_screen_toggle()
 
                 plt.show()
 
