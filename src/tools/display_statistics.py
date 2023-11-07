@@ -1,5 +1,3 @@
-import pandas as pd
-import matplotlib.pyplot as plt
 import time
 from sklearn.neighbors import NearestNeighbors
 import os
@@ -141,8 +139,6 @@ def save_histograms(show_histogram):
 
         if show_histogram:
             time.sleep(2)
-
-save_histograms(False)
 
 
 def return_bounding_box(model_name, mesh):

@@ -1,23 +1,23 @@
 from render.model import Model
 from render.skybox import Skybox
-from render.mesh import Mesh
 from scenes.scene import Scene
-from pyrr import Vector3, matrix44
+from pyrr import Vector3
 from light import Light
 import imgui
 import os
 from tools.display_statistics import return_neighbors, return_bounding_box, return_shape_descriptors
-from tools.save_statistics import save_data
 from tqdm import tqdm
 from render.lines import Lines
 import trimesh
 import numpy as np
 from tools.descriptor_extraction import *
-from numba import njit
 from multiprocessing import Pool, cpu_count
 from scenes.scene_utils import *
 import pynndescent
 import pandas as pd
+from sklearn.manifold import TSNE
+import matplotlib.pyplot as plt
+import mplcursors
 
 
 def normalize_single_features(mesh_features):
@@ -431,6 +431,58 @@ class QueryScene(Scene):
 
             # End the window
             imgui.end()
+
+            # Step 5
+            imgui.unindent(16)
+            imgui.spacing()
+            imgui.separator()
+            imgui.text("Step 5: Scalability")
+            imgui.spacing()
+            imgui.indent(16)
+            if imgui.button("Run t-SNE"):
+                model_names = [name for name in self.all_descriptors]
+
+                reduced_features = TSNE(
+                    n_components=2, learning_rate='auto', init='random', perplexity=15, n_jobs=-1
+                ).fit_transform(np.array([mesh.get_normalized_features() for _, mesh in self.all_descriptors.items()]))
+
+                unique_classes = list(set(self.all_classes))
+                num_classes = len(unique_classes)
+                class_colors = plt.cm.viridis(np.linspace(0, 1, num_classes))
+
+                colormap = []
+                model_classes = []
+
+                for name in model_names:
+                    for index, (shape_class, shape_names) in enumerate(self.all_model_names.items()):
+                        for shape_name in shape_names:
+                            if shape_name == name:
+                                colormap.append(class_colors[index])
+                                model_classes.append(shape_class)
+                                break
+                        else:
+                            continue
+                        break
+
+                # Create a scatterplot and assign colors based on class labels
+                plt.subplots(figsize=(16, 9))
+
+                plt.scatter(reduced_features[:, 0], reduced_features[:, 1], s=5, color=colormap)
+
+                plt.title('t-SNE Scatterplot')
+
+                plt.xlabel('First Feature')
+                plt.ylabel('Second Feature')
+
+                cursor = mplcursors.cursor(hover=True)
+                cursor.connect("add", lambda sel: sel.annotation.set_text(
+                    f"Class: {model_classes[sel.target.index]}\nName: {model_names[sel.target.index]}"))
+
+                # Toggle full screen mode
+                manager = plt.get_current_fig_manager()
+                manager.full_screen_toggle()
+
+                plt.show()
 
             # Step 6
             imgui.unindent(16)
