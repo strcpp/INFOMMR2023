@@ -96,6 +96,19 @@ class QueryScene(Scene):
     show_poorly_sampled = False
     selected_poorly_sampled = 0
     show_normalized = False
+    selected_distance_id = 0
+    selected_distance = "Euclidean"
+    available_distances = ["Euclidean",
+                           "Cosine",
+                           "EMD",
+                           "Euclidean (Single) + EMD (Histogram)",
+                           "Euclidean (Single) + Cosine (Histogram)",
+                           "Cosine (Single) + EMD (Histogram)",
+                           "Cosine (Single) + Euclidean (Histogram)",
+                           "EMD (Single) + Euclidean (Histogram)",
+                           "EMD (Single) + Cosine (Histogram)",
+                           ]
+    evaluate_cbsr = False
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -152,7 +165,7 @@ class QueryScene(Scene):
         condition_high = (all_neighbors['Number of Vertices'] > 50000)
 
         # Use 5 shapes with less than 100 faces/vertices and 5 shapes with more than 50000 faces/vertices
-        poorly_sampled = pd.concat([all_neighbors[condition_low].head(4), all_neighbors[condition_high].head(4)])
+        poorly_sampled = pd.concat([all_neighbors[condition_low].head(1), all_neighbors[condition_high].head(1)])
 
         # Resampling poorly sampled outliers
         for _, outlier in tqdm(poorly_sampled.iterrows(), desc="Resampling outliers"):
@@ -196,7 +209,8 @@ class QueryScene(Scene):
         # Setting all NaN features to 0
         query_shapes = np.nan_to_num(query_shapes, nan=0)
 
-        self.index = pynndescent.NNDescent(query_shapes, n_jobs=-1, random_state=42)
+        # Preparing index
+        self.index = pynndescent.NNDescent(query_shapes, n_jobs=-1, random_state=42, metric="braycurtis")
         self.index.prepare()
         print("< Finished setting up ANN Query!")
 
@@ -224,14 +238,10 @@ class QueryScene(Scene):
         imgui.text("Click and drag middle mouse button to pan camera.")
 
         # General settings
+        imgui.spacing()
         imgui.text("Visualization Settings: ")
         imgui.spacing()
         imgui.indent(16)
-        shading_modes = ["flat", "smooth"]
-        clicked, current_item = imgui.combo("Shading Mode", self.current_shading_mode, shading_modes)
-        if clicked:
-            self.current_shading_mode = current_item
-            self.current_model.set_shading(shading_modes[self.current_shading_mode])
 
         _, self.show_wireframe = imgui.checkbox("Show Wireframe", self.show_wireframe)
         _, self.show_bb = imgui.checkbox("Show Bounding Boxes", self.show_bb)
@@ -250,18 +260,21 @@ class QueryScene(Scene):
         imgui.separator()
         imgui.text("Step 2 - Outlier Resampling: ")
         imgui.spacing()
-        imgui.indent(16)
-        clicked, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled Shapes",
+        _, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled Shapes",
                                                            self.show_poorly_sampled)
 
         if self.show_poorly_sampled:
             imgui.spacing()
             imgui.indent(16)
             imgui.text("Select Poorly Sampled Shape:")
+            imgui.spacing()
+            imgui.indent(16)
             _, self.selected_poorly_sampled = imgui.combo(" ",
                                                           self.selected_poorly_sampled,
                                                           [f"{shape[4]}({shape[5]})" for shape in self.poorly_sampled])
+            imgui.unindent(32)
             self.show_normalized = False
+            self.evaluate_cbsr = False
 
             self.current_model_name = self.poorly_sampled[self.selected_poorly_sampled][4]
             self.current_class = self.poorly_sampled[self.selected_poorly_sampled][5]
@@ -274,22 +287,20 @@ class QueryScene(Scene):
             self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
 
         # Step 3
-        imgui.unindent(16)
-        if self.show_poorly_sampled:
-            imgui.unindent(16)
         imgui.spacing()
         imgui.separator()
         imgui.text("Step 3 - Normalization: ")
         imgui.spacing()
-        imgui.indent(16)
-
-        clicked, self.show_normalized = imgui.checkbox("Show Normalized Shapes", self.show_normalized)
+        _, self.show_normalized = imgui.checkbox("Show Normalized Shapes", self.show_normalized)
 
         if self.show_normalized:
+            imgui.indent(16)
+            imgui.spacing()
             imgui.text("Select Normalized Shape:")
             imgui.spacing()
             imgui.indent(16)
             self.show_poorly_sampled = False
+            self.evaluate_cbsr = False
             # Add a combo box for classes
             clicked, self.current_class_id = imgui.combo("Classes", self.current_class_id, self.all_classes)
             if clicked:
@@ -320,21 +331,33 @@ class QueryScene(Scene):
                     self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
 
         if self.show_normalized:
-            imgui.unindent(16)
-            imgui.unindent(16)
+            imgui.unindent(32)
             imgui.spacing()
             imgui.separator()
             imgui.text("Steps 4-5: Query: ")
             imgui.spacing()
             imgui.indent(16)
 
-            _, self.neighbor_count = imgui.input_int("Number of Returned Shapes", self.neighbor_count)
-
+            imgui.text("Select the Number of Returned Shapes: ")
+            imgui.spacing()
+            imgui.indent(16)
+            _, self.neighbor_count = imgui.input_int(" ", self.neighbor_count)
+            imgui.unindent(16)
+            imgui.spacing()
+            imgui.text("Select Distance Metric (Custom): ")
+            imgui.spacing()
+            imgui.indent(16)
+            clicked, self.selected_distance_id = imgui.combo("      ", self.selected_distance_id,
+                                                             [distance for distance in self.available_distances])
+            imgui.unindent(16)
+            if clicked:
+                self.selected_distance = self.available_distances[self.selected_distance_id]
+            imgui.spacing()
             if imgui.button("Get Best-Matching Shapes (Custom)"):
                 matching_names, self.distances = get_best_matching_shapes(
                     self.all_descriptors[self.current_model_name],
                     {key: value for key, value in self.all_descriptors.items() if key != self.current_model_name},
-                    self.neighbor_count)
+                    self.neighbor_count, self.selected_distance)
                 self.best_matching_shapes = [(Model(self.app, name, self.all_meshes[name]), name) for name in
                                              matching_names]
                 for name in matching_names:
@@ -356,7 +379,7 @@ class QueryScene(Scene):
                     self.all_bounding_boxes[name] = get_bb_lines(self.all_meshes[name].bounds)
                     self.all_basis_lines[name] = get_basis_lines(self.all_meshes[name].bounds, None)
                     self.all_barycenter_lines[name] = get_basis_lines(None, self.all_meshes[name].centroid)
-
+            imgui.unindent(16)
         if self.current_model != '':
             imgui.set_next_window_position(420, 20, imgui.ONCE)
             if imgui.begin("Info", True):
@@ -410,13 +433,11 @@ class QueryScene(Scene):
                         imgui.text("{}: {:.2f}".format("Diameter", self.all_descriptors[shape].diameter))
                         imgui.text("{}: {:.2f}".format("Convexity", self.all_descriptors[shape].convexity))
                         imgui.text("{}: {:.2f}".format("Eccentricity", self.all_descriptors[shape].eccentricity))
-                        if imgui.button("Save Distributions"):
-                            self.all_descriptors[shape].save_A3_histogram_image()
-                            self.all_descriptors[shape].save_D1_histogram_image()
-                            self.all_descriptors[shape].save_D2_histogram_image()
-                            self.all_descriptors[shape].save_D3_histogram_image()
-                            self.all_descriptors[shape].save_D4_histogram_image()
-                        imgui.text("")
+                        imgui.spacing()
+                        imgui.spacing()
+                        imgui.spacing()
+                        imgui.spacing()
+                        imgui.spacing()
                         imgui.next_column()
                 else:
                     imgui.text(f"Shape Class: {self.current_class}")
@@ -433,7 +454,6 @@ class QueryScene(Scene):
             imgui.end()
 
             # Step 5
-            imgui.unindent(16)
             imgui.spacing()
             imgui.separator()
             imgui.text("Step 5: Scalability")
@@ -486,26 +506,43 @@ class QueryScene(Scene):
             imgui.separator()
             imgui.text("Step 6: Evaluation")
             imgui.spacing()
-            imgui.indent(16)
-            if imgui.button("Evaluate CBSR System"):
+
+            _, self.evaluate_cbsr = imgui.checkbox("Evaluate CBSR System", self.evaluate_cbsr)
+
+            if self.evaluate_cbsr:
+                imgui.indent(16)
                 self.shapes_per_class = {key: len(value) for key, value in self.all_model_names.items()}
-                self.show_rest_of_ui_step_5 = False
-                self.show_rest_of_ui_step_6 = True
+                self.show_poorly_sampled = False
+                self.show_normalized = False
 
-            if self.show_rest_of_ui_step_6:
-                _, self.neighbor_count = imgui.input_int("Number of Neighbors", self.neighbor_count)
+                imgui.spacing()
+                imgui.text("Select the Number of Returned Shapes: ")
+                imgui.spacing()
+                imgui.indent(16)
+                _, self.neighbor_count = imgui.input_int(" ", self.neighbor_count)
+                imgui.unindent(16)
+                imgui.spacing()
+                imgui.text("Select Distance Metric (Custom): ")
+                imgui.spacing()
+                imgui.indent(16)
+                clicked, self.selected_distance_id = imgui.combo("              ", self.selected_distance_id,
+                                                                 [distance for distance in self.available_distances])
+                imgui.spacing()
+                imgui.unindent(16)
+                if clicked:
+                    self.selected_distance = self.available_distances[self.selected_distance_id]
 
-                if imgui.button("Use Custom Query"):
+                if imgui.button("Evaluate Custom Query"):
                     self.precisions, self.recalls, self.f1_scores = evaluate_query(
                         "Custom", self.all_descriptors, self.neighbor_count, self.shapes_per_class,
-                        self.all_model_names, None
+                        self.all_model_names, None, self.selected_distance
                     )
                     self.evaluate = True
 
-                if imgui.button("Use ANN"):
+                if imgui.button("Evaluate ANN"):
                     self.precisions, self.recalls, self.f1_scores = evaluate_query(
                         "ANN", self.all_descriptors, self.neighbor_count, self.shapes_per_class, self.all_model_names,
-                        self.index
+                        self.index, ""
                     )
                     self.evaluate = True
 

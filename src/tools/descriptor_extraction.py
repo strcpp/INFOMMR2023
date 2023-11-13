@@ -396,6 +396,26 @@ class ShapeDescriptors:
 
         return return_list
 
+    def get_normalized_single_features(self):
+        return [self.surface_area_normalized,
+                self.compactness_normalized,
+                self.rectangularity_normalized,
+                self.diameter_normalized,
+                self.convexity_normalized,
+                self.eccentricity_normalized,
+                ]
+
+    def get_normalized_histogram_features(self):
+        return_list = []
+
+        return_list.extend([x for x in self.A3])
+        return_list.extend([x for x in self.D1])
+        return_list.extend([x for x in self.D2])
+        return_list.extend([x for x in self.D3])
+        return_list.extend([x for x in self.D4])
+
+        return return_list
+
     def normalize_single_features(self, updated_features):
         self.surface_area_normalized = updated_features[0]
         self.compactness_normalized = updated_features[1]

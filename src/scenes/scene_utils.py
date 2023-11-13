@@ -5,6 +5,8 @@ from numba import njit
 from tools.descriptor_extraction import ShapeDescriptors
 from pynndescent import NNDescent
 from tqdm import tqdm
+from scipy.spatial.distance import cosine
+from scipy.stats import wasserstein_distance
 
 THRESHOLD = 500
 
@@ -99,13 +101,91 @@ def euclidean_distance(x1: np.ndarray, x2: np.ndarray) -> float:
     return np.sqrt(np.sum((x1 - x2) ** 2))
 
 
-def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors):
+def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors: int, distance_metric: str):
     distances = {}
-    current_features = np.array(current_mesh.get_normalized_features())
-
     for model_name, mesh in all_meshes.items():
-        mesh_features = np.array(mesh.get_normalized_features())
-        distances[model_name] = euclidean_distance(current_features, mesh_features)
+        if distance_metric == "Euclidean":
+            current_features = np.array(current_mesh.get_normalized_features())
+            mesh_features = np.array(mesh.get_normalized_features())
+
+            distances[model_name] = euclidean_distance(current_features, mesh_features)
+        elif distance_metric == "Cosine":
+            current_features = np.array(current_mesh.get_normalized_features())
+            mesh_features = np.array(mesh.get_normalized_features())
+
+            distances[model_name] = cosine(current_features, mesh_features)
+        elif distance_metric == "EMD":
+            current_features = np.array(current_mesh.get_normalized_features())
+            mesh_features = np.array(mesh.get_normalized_features())
+
+            distances[model_name] = wasserstein_distance(current_features, mesh_features)
+
+        elif distance_metric == "Euclidean (Single) + EMD (Histogram)":
+            current_single_features = np.array(current_mesh.get_normalized_single_features())
+            current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
+
+            mesh_single_features = np.array(mesh.get_normalized_single_features())
+            mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
+
+            single_distance = euclidean_distance(current_single_features, mesh_single_features)
+            histogram_distance = wasserstein_distance(current_histogram_features, mesh_histogram_features)
+
+            distances[model_name] = single_distance * 0.04 + histogram_distance * 0.96
+        elif distance_metric == "Euclidean (Single) + Cosine (Histogram)":
+            current_single_features = np.array(current_mesh.get_normalized_single_features())
+            current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
+
+            mesh_single_features = np.array(mesh.get_normalized_single_features())
+            mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
+
+            single_distance = euclidean_distance(current_single_features, mesh_single_features)
+            histogram_distance = cosine(current_histogram_features, mesh_histogram_features)
+
+            distances[model_name] = single_distance * 0.04 + histogram_distance * 0.96
+        elif distance_metric == "Cosine (Single) + EMD (Histogram)":
+            current_single_features = np.array(current_mesh.get_normalized_single_features())
+            current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
+
+            mesh_single_features = np.array(mesh.get_normalized_single_features())
+            mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
+
+            single_distance = cosine(current_single_features, mesh_single_features)
+            histogram_distance = wasserstein_distance(current_histogram_features, mesh_histogram_features)
+
+            distances[model_name] = single_distance * 0.2 + histogram_distance * 0.8
+        elif distance_metric == "Cosine (Single) + Euclidean (Histogram)":
+            current_single_features = np.array(current_mesh.get_normalized_single_features())
+            current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
+
+            mesh_single_features = np.array(mesh.get_normalized_single_features())
+            mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
+
+            single_distance = cosine(current_single_features, mesh_single_features)
+            histogram_distance = euclidean_distance(current_histogram_features, mesh_histogram_features)
+
+            distances[model_name] = single_distance * 0.4 + histogram_distance * 0.6
+        elif distance_metric == "EMD (Single) + Euclidean (Histogram)":
+            current_single_features = np.array(current_mesh.get_normalized_single_features())
+            current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
+
+            mesh_single_features = np.array(mesh.get_normalized_single_features())
+            mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
+
+            single_distance = wasserstein_distance(current_single_features, mesh_single_features)
+            histogram_distance = euclidean_distance(current_histogram_features, mesh_histogram_features)
+
+            distances[model_name] = single_distance * 0.3 + histogram_distance * 0.7
+        elif distance_metric == "EMD (Single) + Cosine (Histogram)":
+            current_single_features = np.array(current_mesh.get_normalized_single_features())
+            current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
+
+            mesh_single_features = np.array(mesh.get_normalized_single_features())
+            mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
+
+            single_distance = wasserstein_distance(current_single_features, mesh_single_features)
+            histogram_distance = cosine(current_histogram_features, mesh_histogram_features)
+
+            distances[model_name] = single_distance * 0.3 + histogram_distance * 0.7
 
     sorted_distances = sorted(distances.items(), key=lambda item: item[1])
     best_matching_shapes = [model_name for model_name, _ in sorted_distances[:num_neighbors]]
@@ -157,7 +237,7 @@ def calculate_recall(name: str, matched_shapes: list[any], all_classes: dict[str
 
 def evaluate_query(
         query_type: str, all_shapes, k: int, shapes_per_class: dict[str, int], all_classes: dict[str, list[str]],
-        index: NNDescent
+        index: NNDescent, distance_metric: str
 ):
     """ Evaluates quality of selected query. """
     precisions = {}
@@ -171,7 +251,7 @@ def evaluate_query(
         # Query based on selected query type
         if query_type == "Custom":
             matching_names, _ = get_best_matching_shapes(
-                descriptor, {key: value for key, value in all_shapes.items() if key != name}, k
+                descriptor, {key: value for key, value in all_shapes.items() if key != name}, k, distance_metric
             )
         elif query_type == "ANN":
             neighbor_indexes, _ = index.query(np.array([descriptor.get_normalized_features()]), k=k + 1)

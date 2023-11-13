@@ -14,3 +14,4 @@ pywavefront
 open3d
 pynndescent
 mplcursors
+scipy
