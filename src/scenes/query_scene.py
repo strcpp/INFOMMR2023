@@ -468,7 +468,7 @@ class QueryScene(Scene):
 
                 unique_classes = list(set(self.all_classes))
                 num_classes = len(unique_classes)
-                class_colors = plt.cm.viridis(np.linspace(0, 1, num_classes))
+                class_colors = plt.cm.rainbow(np.linspace(0, 1, num_classes))
 
                 colormap = []
                 model_classes = []
