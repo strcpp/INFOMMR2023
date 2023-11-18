@@ -12,7 +12,11 @@ THRESHOLD = 500
 
 
 def get_bb_lines(bounding_box: np.ndarray[float]) -> list[tuple[float, float]]:
-    """ Gets the bounding box connections of a shape's bounding box coordinates. """
+    """
+    Gets the bounding box connections of a shape's bounding box coordinates.
+    :param bounding_box: Shape bounding box.
+    :return: Bounding box connections
+    """
     x0, y0, z0 = bounding_box[0][0], bounding_box[0][1], bounding_box[0][2]
     x1, y1, z1 = bounding_box[1][0], bounding_box[1][1], bounding_box[1][2]
 
@@ -37,7 +41,12 @@ def get_bb_lines(bounding_box: np.ndarray[float]) -> list[tuple[float, float]]:
 
 
 def get_basis_lines(bounding_box: np.ndarray, barycenter: np.ndarray) -> list[tuple[any, any]]:
-    """ Returns the 3D axis of a shape calculated at its center. """
+    """
+    Returns the 3D axis of a shape calculated at its center.
+    :param bounding_box: Shape bounding box.
+    :param barycenter: Shape barycenter (centroid).
+    :return: Shape 3D axis
+    """
     # Calculate the model's geometric center
     if bounding_box is not None:
         center_x = (bounding_box[0][0] + bounding_box[1][0]) / 2
@@ -67,7 +76,12 @@ def get_basis_lines(bounding_box: np.ndarray, barycenter: np.ndarray) -> list[tu
 
 
 def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
-    """ Resamples a mesh to a specific target number of vertices. """
+    """
+    Resamples a mesh to a specific target number of vertices.
+    :param mesh: Model mesh.
+    :param target_vertices: Target vertices to resample to.
+    :return: Resampled mesh.
+    """
     while len(mesh.vertices) > target_vertices + THRESHOLD or len(mesh.vertices) < target_vertices - THRESHOLD:
         # If number of vertices is too high, simplify
         if len(mesh.vertices) > target_vertices + THRESHOLD:
@@ -81,7 +95,10 @@ def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
 
 
 def normalize_single_features(mesh_features: ShapeDescriptors) -> None:
-    """ Normalizes the single features of all shapes. """
+    """
+    Normalizes the single features of all shapes.
+    :param mesh_features: Shape descriptors of all meshes.
+    """
     feature_values = [descriptor.get_single_features() for descriptor in mesh_features]
 
     features_array = np.array(feature_values)
@@ -97,11 +114,26 @@ def normalize_single_features(mesh_features: ShapeDescriptors) -> None:
 
 @njit
 def euclidean_distance(x1: np.ndarray, x2: np.ndarray) -> float:
-    """ Calculates the Euclidean distance of 2 features. """
+    """
+    Calculates the Euclidean distance between 2 samples.
+    :param x1: 1st sample.
+    :param x2: 2nd sample.
+    :return: Euclidean distance between the 2 samples.
+    """
     return np.sqrt(np.sum((x1 - x2) ** 2))
 
 
-def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors: int, distance_metric: str):
+def get_best_matching_shapes(
+        current_mesh, all_meshes, num_neighbors: int, distance_metric: str
+) -> tuple[list[str], list[float]]:
+    """
+    Gets the n best-matching shapes of a query shape based on a distance metric.
+    :param current_mesh: Mesh of the query shape.
+    :param all_meshes: All database meshes except the query shape.
+    :param num_neighbors: Number of best-matching shapes to return.
+    :param distance_metric: Distance metric to use.
+    :return: Tuple of the n best-matching shapes and their distances to the query shape.
+    """
     distances = {}
     for model_name, mesh in all_meshes.items():
         if distance_metric == "Euclidean":
@@ -189,12 +221,17 @@ def get_best_matching_shapes(current_mesh, all_meshes, num_neighbors: int, dista
 
     sorted_distances = sorted(distances.items(), key=lambda item: item[1])
     best_matching_shapes = [model_name for model_name, _ in sorted_distances[:num_neighbors]]
+    distances = [distance[1] for distance in distances.items()]
 
-    return best_matching_shapes, [distance[1] for distance in distances.items()]
+    return best_matching_shapes, distances
 
 
 def calculate_shapes_per_class(shapes: list[any]) -> dict[str, int]:
-    """ Calculates the number of shapes of each shape class. """
+    """
+    Calculates the number of shapes of each shape class.
+    :param shapes: List of all meshes, their names and class names.
+    :return: Dictionary where the keys are the shape classes and the values are the number of shapes of that class.
+    """
     shapes_per_class = {}
     for shape in shapes:
         shape_class = shape[5]
@@ -206,40 +243,69 @@ def calculate_shapes_per_class(shapes: list[any]) -> dict[str, int]:
 
 
 def calculate_precision(name: str, matched_shapes: list[any], all_classes: dict[str, list[str]]) -> tuple[float, str]:
-    """ Calculates the precision of a query. """
+    """
+    Calculates the precision of a query.
+    :param name: Name of the query shape.
+    :param matched_shapes: N best-matching shapes.
+    :param all_classes: All classes.
+    :return: Precision of the query.
+    """
     tp = 0
     fp = 0
+    correct_class = None
     for key, values in all_classes.items():
         if name in values:
             correct_class = key
             break
-    for matched_shape in matched_shapes:
-        if matched_shape in all_classes.get(correct_class, []):
-            tp += 1
-        else:
-            fp += 1
-    return tp / (tp + fp) if (tp + fp) > 0 else 0, correct_class
+
+    if correct_class:
+        for matched_shape in matched_shapes:
+            if matched_shape in all_classes.get(correct_class, []):
+                tp += 1
+            else:
+                fp += 1
+        return tp / (tp + fp) if (tp + fp) > 0 else 0, correct_class
+    return 0.0, ""
 
 
 def calculate_recall(name: str, matched_shapes: list[any], all_classes: dict[str, list[str]]) -> tuple[float, str]:
-    """ Calculates the recall of a query. """
+    """
+    Calculates the recall of a query.
+    :param name: Name of the query shape.
+    :param matched_shapes: N best-matching shapes.
+    :param all_classes: All classes.
+    :return: Recall of the query.
+    """
     tp = 0
+    correct_class = None
     for key, values in all_classes.items():
         if name in values:
             correct_class = key
             break
-    for matched_shape in matched_shapes:
-        if matched_shape in all_classes.get(correct_class, []):
-            tp += 1
-    fn = len(all_classes.get(correct_class, [])) - tp
-    return tp / (tp + fn) if (tp + fn) > 0 else 0, correct_class
+    if correct_class:
+        for matched_shape in matched_shapes:
+            if matched_shape in all_classes.get(correct_class, []):
+                tp += 1
+        fn = len(all_classes.get(correct_class, [])) - tp
+        return tp / (tp + fn) if (tp + fn) > 0 else 0, correct_class
+    return 0.0, ""
 
 
 def evaluate_query(
-        query_type: str, all_shapes, k: int, shapes_per_class: dict[str, int], all_classes: dict[str, list[str]],
-        index: NNDescent, distance_metric: str
-):
-    """ Evaluates quality of selected query. """
+        query_type: str, all_shapes: dict[any], k: int, shapes_per_class: dict[str, int],
+        all_classes: dict[str, list[str]], index: NNDescent, distance_metric: str
+) -> tuple[dict[str, float | int], dict[str, float | int], dict[str, float | int]]:
+    """
+    Evaluates quality of selected query.
+    :param query_type: Type of query (Custom or ANN).
+    :param all_shapes: All shapes.
+    :param k: Number of best-matching shapes to return.
+    :param shapes_per_class: Number of shapes of each class.
+    :param all_classes: All classes.
+    :param index: Query index used for the ANN query.
+    :param distance_metric: Distance metric to use.
+    :return: Precisions, recalls and f1-scores for all classes, as well as for each class separately.
+    """
     precisions = {}
     recalls = {}
     f1_scores = {}
@@ -256,6 +322,10 @@ def evaluate_query(
         elif query_type == "ANN":
             neighbor_indexes, _ = index.query(np.array([descriptor.get_normalized_features()]), k=k + 1)
             matching_names = [list(all_shapes.keys())[k] for k in neighbor_indexes.flatten().tolist()[1:]]
+        else:
+            print(f"No implementation for the query type: {query_type}")
+            print("Exiting application...")
+            exit()
 
         precision, correct_class = calculate_precision(name, matching_names, all_classes)
         recall, _ = calculate_recall(name, matching_names, all_classes)

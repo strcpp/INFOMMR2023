@@ -3,7 +3,8 @@ from numba import njit
 import matplotlib.pyplot as plt
 import os
 import pandas as pd
-import trimesh
+from trimesh import Trimesh
+
 
 output_dir1 = "tools/outputs/histograms/descriptors"
 output_dir2 = "src/tools/outputs/histograms/descriptors"
@@ -14,17 +15,13 @@ SAMPLE_SIZE = 1000
 BIN_SIZE = 10
 
 
-def calculate_mesh_volume(mesh):
-    # # Attempt to fix the mesh using pymeshfix
-    # mfix = MeshFix(mesh.vertices, mesh.faces)
-    # mfix.repair()
-    # fixed_mesh = mfix.mesh
-
-    # print(fixed_mesh)
-    # # Convert fixed_mesh back to a trimesh.Trimesh object if necessary
-    # mesh = trimesh.Trimesh(vertices=fixed_mesh.v, faces=fixed_mesh.f)
-
-    # # Check if the mesh is watertight after repair
+def calculate_mesh_volume(mesh: Trimesh) -> float:
+    """
+    Calculates the volume of a mesh.
+    :param mesh: Trimesh mesh.
+    :return: Volume of the mesh.
+    """
+    # Check if the mesh is watertight after repair
     if not mesh.is_watertight:
         mesh.fill_holes()
 
@@ -41,8 +38,14 @@ def calculate_mesh_volume(mesh):
 
 
 class ShapeDescriptors:
+    """
+    Represents the descriptors of a shape.
+    """
     def __init__(self, mesh, model_class, model_name, surface_area, compactness, rectangularity, diameter, convexity,
                  eccentricity, A3, D1, D2, D3, D4):
+        """
+        Constructor
+        """
         self.mesh = mesh
         self.n_vertices = len(mesh.vertices)
         self.n_faces = len(mesh.faces)
@@ -72,6 +75,7 @@ class ShapeDescriptors:
     def from_csv_row(cls, row, mesh):
 
         model_class = row['Model Class'].item()
+
         model_name = row['Model Name'].item()
 
         surface_area = row['Surface Area'].iloc[0] if not pd.isnull(row['Surface Area'].iloc[0]) else 0.0

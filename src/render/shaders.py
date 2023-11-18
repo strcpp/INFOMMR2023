@@ -34,7 +34,6 @@ class Shaders:
         self.shaders['grid'] = self.app.load_program("shaders/grid.glsl")
         self.shaders['lines'] = self.app.load_program("shaders/thicc_lines.glsl")
 
-
     def get(self, name: str) -> Program:
         """
         Returns the shader.

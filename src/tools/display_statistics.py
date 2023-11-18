@@ -1,8 +1,11 @@
+from __future__ import annotations
 import time
 from sklearn.neighbors import NearestNeighbors
 import os
 from tqdm import tqdm
 import warnings
+from pandas import DataFrame
+from trimesh import Trimesh
 
 try:
     from tools.descriptor_extraction import *
@@ -17,7 +20,7 @@ csv_file_path = os.path.join('src', 'tools', 'outputs', 'shape_data.csv')
 database_file_path = os.path.join('src', 'tools', 'outputs', 'database.csv')
 
 
-def histogram(df, column_name, class_name, show):
+def histogram(df: DataFrame, column_name: str, class_name: str | None, show: bool) -> None:
     """
     Shows the histogram for a specific column
     :param df: Dataframe
@@ -69,7 +72,7 @@ def histogram(df, column_name, class_name, show):
         plt.show()
 
 
-def return_neighbors():
+def return_neighbors() -> tuple[DataFrame, DataFrame]:
     """
     Returns the nearest neighbor to the average shape as well as the 5 farthest neighbors (outliers).
     :return: Average shapes and all shapes
@@ -105,9 +108,11 @@ def return_neighbors():
     return df.iloc[nearest_neighbor_index], df.iloc[all_neighbors_indices]
 
 
-def save_histograms(show_histogram):
+def save_histograms(show_histogram: bool = False) -> None:
     """
-    Displays multiple histograms
+    Saves and displays histograms for the average number of vertices and faces for the whole database,
+    as well as for each class separately.
+    :param show_histogram: If True, the histograms are displayed (this can take a long time).
     """
     try:
         df = pd.read_csv(csv_file_path, delimiter=';')
@@ -141,7 +146,13 @@ def save_histograms(show_histogram):
             time.sleep(2)
 
 
-def return_bounding_box(model_name, mesh):
+def return_bounding_box(model_name: str, mesh: Trimesh) -> list[list[float]]:
+    """
+    Returns the bounding box of a shape read from a file or from a loaded Trimesh object.
+    :param model_name: Model name.
+    :param mesh: Trimesh mesh.
+    :return: Mesh bounding box.
+    """
     if model_name:
         try:
             df = pd.read_csv(csv_file_path, delimiter=';')
@@ -172,7 +183,13 @@ def return_bounding_box(model_name, mesh):
     return bounding_box
 
 
-def return_shape_descriptor(model_name, mesh):
+def return_shape_descriptor(model_name: str, mesh: Trimesh) -> ShapeDescriptors:
+    """
+    Returns the descriptors of a shape.
+    :param model_name: Model name.
+    :param mesh: Trimesh mesh.
+    :return: Descriptors of the mesh.
+    """
     model_name = model_name.replace('.obj', '')
     try:
         df = pd.read_csv(os.path.join(os.getcwd(), database_file_path))
@@ -184,7 +201,16 @@ def return_shape_descriptor(model_name, mesh):
     return ShapeDescriptors.from_csv_row(row, mesh)
 
 
-def return_shape_descriptors(all_model_names, all_meshes):
+def return_shape_descriptors(
+        all_model_names: dict[str, list[str]], all_meshes: dict[str, Trimesh]
+) -> dict[str, ShapeDescriptors]:
+    """
+    Returns the descriptors of all shapes.
+    :param all_model_names: Dictionary where the keys are the shape classes and the values are all the shape names
+    belonging to that class.
+    :param all_meshes: Dictionary where the keys are the shape names and the values are their Trimesh meshes.
+    :return: Dictionary where the keys are the shape names and the values are their Shape Descriptors.
+    """
     # Attempt to read the CSV file from the default path
     try:
         df = pd.read_csv(os.path.join(os.getcwd(), database_file_path), delimiter=';')

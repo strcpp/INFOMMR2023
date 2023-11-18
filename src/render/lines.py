@@ -38,7 +38,7 @@ class Lines:
     Implements a model's skeleton as lines.
     """
 
-    def __init__(self, app, line_width: int = 1, color=None, lines=None) -> None:
+    def __init__(self, app, line_width: int = 1, color: list[int] | None = None, lines: list | None = None) -> None:
         """
         Constructor.
         :param app: Glw app.

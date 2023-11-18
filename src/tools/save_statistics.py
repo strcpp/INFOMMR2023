@@ -1,11 +1,16 @@
+from __future__ import annotations
 import os
 from tqdm import tqdm
 import csv
 import trimesh
-import json
 
 
-def save_data(meshes, resample=True):
+def save_data(meshes: dict | None, resample: bool = True) -> None:
+    """
+    Saves shape database data to CSV.
+    :param meshes: Database meshes. Used to save the resampled shapes.
+    :param resample: If True, saves the resampled meshes during runtime. If False, saves the original data.
+    """
     base = os.path.dirname(__file__)
     models_path = os.path.join(base, '../../resources/models')
 

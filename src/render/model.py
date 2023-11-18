@@ -5,22 +5,21 @@ from typing import Optional
 from light import Light
 from pyrr import Quaternion, Vector3, Matrix44
 from render.shaders import Shaders
+from trimesh import Trimesh
 
 
 class Model:
     """
     Represents a 3D model.
     """
-
-    def __init__(self, app, mesh_name: str, mesh=None) -> None:
+    def __init__(self, app, mesh_name: str, mesh: Trimesh | None = None) -> None:
         """
         Constructor.
         :param app: Glw app.
         :param mesh_name: Name of the model's mesh.
+        :param mesh: Model's mesh.
         """
         meshes = Mesh.instance(app)
-        # meshes.set_mesh_name(mesh_name)
-        # meshes.set_data()
         programs = Shaders.instance()
         self.prog = programs.get('base-flat')
         self.app = app
@@ -40,24 +39,21 @@ class Model:
 
         self.model_transformation = Matrix44.identity()
         self.color = [0, 0, 0]
-        
-    def set_shading(self, shading):
-        programs = Shaders.instance()
-        if shading == "flat":
-            self.prog = programs.get('base-flat')
-        elif shading == "smooth":
-            self.prog = programs.get('base-smooth')
 
     def update(self, dt: float, interpolation_method: str) -> None:
         pass
 
     def get_mesh(self):
         """
-            returns the stored trimesh instance
+        Returns the stored trimesh instance
         """
         return self.mesh
 
-    def set_color(self, color):
+    def set_color(self, color: list[int]) -> None:
+        """
+        Sets model's color.
+        :param color: Model color.
+        """
         self.color = color
 
     def move(self, dx: float, dz: float) -> None:
@@ -95,19 +91,15 @@ class Model:
         scale = Matrix44.from_scale(self.scale)
         self.model_transformation = trans * rot * scale
 
-    def get_model_matrix(self, transformation_matrix: Optional[Matrix44] = None) -> np.ndarray:
+    def get_model_matrix(self) -> np.ndarray:
         """
         Returns the matrix of the model.
-        :param transformation_matrix: Transformation matrix of the model.
         :return: Model matrix.
         """
         model = self.model_transformation
-        # if transformation_matrix is not None:
-        #     model = self.model_transformation * transformation_matrix
-
         return np.array(model, dtype='f4')
 
-    def draw(self, proj_matrix: Matrix44, view_matrix: Matrix44, light: Light, draw_points=False) -> None:
+    def draw(self, proj_matrix: Matrix44, view_matrix: Matrix44, light: Light,) -> None:
         """
         Draws a 3D model.
         :param proj_matrix: Projection matrix.
@@ -124,17 +116,12 @@ class Model:
         prog['light.position'].write(light.position)
         prog['camPos'].write(np.array(self.app.camera.position, dtype='f4'))
 
-        prog['model'].write(self.get_model_matrix(None))
+        prog['model'].write(self.get_model_matrix())
         prog['view'].write(view_matrix)
         prog['projection'].write(proj_matrix)
         prog['ucolor'].write(np.array(self.color, dtype='f4'))
 
-        # prog['useTexture'].value = texture is not None
-
         if texture is not None:
             texture.use()
 
-        if draw_points:
-            vao.render(mode=moderngl.POINTS)
-        else:
-            vao.render()
+        vao.render()

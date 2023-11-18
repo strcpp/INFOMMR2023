@@ -1,10 +1,11 @@
-from tqdm import tqdm
+from __future__ import annotations
+import pandas as pd
 import trimesh
-from multiprocessing import Pool, cpu_count
 from descriptor_extraction import *
 from display_statistics import return_neighbors
+from multiprocessing import Pool, cpu_count
+from tqdm import tqdm
 
-import pandas as pd
 
 database_path = os.path.join('src', 'tools', 'outputs', 'database.csv')
 models_path = os.path.join(os.path.dirname(__file__), '..', '..', 'resources', 'models', 'Default')
@@ -13,8 +14,14 @@ normalized_models_path = os.path.join(os.path.dirname(__file__), '..', '..', 're
 THRESHOLD = 500
 
 
-def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
-    """ Resamples a mesh to a specific target number of vertices. """
+def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh | None:
+    """
+    Resamples a mesh to a specific target number of vertices.
+    :param mesh: Model mesh.
+    :param target_vertices: Target vertices to resample to.
+    :return: Resampled mesh.
+    """
+    iterations = 0
     while len(mesh.vertices) > target_vertices + THRESHOLD or len(mesh.vertices) < target_vertices - THRESHOLD:
         # If number of vertices is too high, simplify
         if len(mesh.vertices) > target_vertices + THRESHOLD:
@@ -24,38 +31,31 @@ def resample(mesh: trimesh.Trimesh, target_vertices: int) -> trimesh.Trimesh:
         # If number of vertices is too low, subdivide
         if len(mesh.vertices) < target_vertices - THRESHOLD:
             mesh = trimesh.Trimesh(*trimesh.remesh.subdivide(mesh.vertices, mesh.faces))
+        iterations += 1
+        if iterations > 10:
+            return None
     return mesh
 
 
-def align_to_largest_extent_component(mesh):
+def align_to_largest_extent_component(mesh: Trimesh) -> Trimesh:
+    """
+    Aligns mesh to the largest extent component.
+    :param mesh: Mesh that will be aligned.
+    :return: Aligned mesh.
+    """
     extents = mesh.extents
     max_extent_direction = mesh.vertices.max(axis=0) - mesh.vertices.min(axis=0)
     major_axis_index = np.argmax(extents)
     major_axis_sign = np.sign(max_extent_direction[major_axis_index])
-    
+
     # Ensure the major axis points in the positive direction
     if major_axis_sign < 0:
         mesh.vertices[:, major_axis_index] *= -1  # This flips the mesh along the major axis
 
     return mesh
 
-def align_mesh_axes(eig_vectors):
-    # Reorder eigenvectors: longest axis (major) aligns with X-axis, shortest (minor) with Y-axis.
-    # The cross product ensures that the resulting system is right-handed.
-    major_axis_vector = eig_vectors[:, 2]  # longest axis - X
-    minor_axis_vector = eig_vectors[:, 0]  # shortest axis - Y
-    medium_axis_vector = np.cross(minor_axis_vector, major_axis_vector)  # cross product - Z
-    
-    # Now we construct the new orientation matrix such that each column is an axis vector
-    new_orientation = np.column_stack((major_axis_vector, minor_axis_vector, medium_axis_vector))
-    
-    # Ensure the matrix is a proper rotation matrix by checking its determinant
-    if np.linalg.det(new_orientation) < 0:
-        new_orientation[:, 1] = -new_orientation[:, 1]  # invert Y if we don't have a right-handed system
-    
-    return new_orientation
 
-def align_mesh_axes(eig_vectors, eig_values, vertices):
+def align_mesh_axes(eig_vectors: np.ndarray, eig_values: np.ndarray, vertices: np.ndarray) -> np.ndarray:
     # Sort eigenvalues and eigenvectors by the magnitude of the eigenvalues (major to minor)
     sort_idx = np.argsort(-eig_values)
     eig_vectors = eig_vectors[:, sort_idx]
@@ -79,6 +79,7 @@ def align_mesh_axes(eig_vectors, eig_values, vertices):
         aligned_eig_vectors[:, 2] = -aligned_eig_vectors[:, 2]
 
     return aligned_eig_vectors
+
 
 def align_mesh(mesh, eig_vectors):
     # Apply the rotation to align the mesh with the new axes
@@ -104,35 +105,38 @@ def process_mesh(args):
     mesh.remove_duplicate_faces()
     mesh = resample(mesh, target_faces)
 
-   # Step 2: Translation
-    barycenter = mesh.centroid
-    mesh.apply_translation(-barycenter)
+    if mesh:
+        # Step 2: Translation
+        barycenter = mesh.centroid
+        mesh.apply_translation(-barycenter)
 
-    # Step 3: Pose (alignment)
-    covariance_matrix = np.cov(mesh.vertices.T)
-    eig_values, eig_vectors = np.linalg.eig(covariance_matrix)
-    sorted_indices = np.argsort(-eig_values)
-    eig_vectors = eig_vectors[:, sorted_indices]
-    aligned_eig_vectors = align_mesh_axes(eig_vectors, eig_values, mesh.vertices)
-    mesh = align_mesh(mesh, aligned_eig_vectors)
+        # Step 3: Pose (alignment)
+        covariance_matrix = np.cov(mesh.vertices.T)
+        eig_values, eig_vectors = np.linalg.eig(covariance_matrix)
+        sorted_indices = np.argsort(-eig_values)
+        eig_vectors = eig_vectors[:, sorted_indices]
+        aligned_eig_vectors = align_mesh_axes(eig_vectors, eig_values, mesh.vertices)
+        mesh = align_mesh(mesh, aligned_eig_vectors)
 
-    # Step 4: Scale
-    max_dimension = max(mesh.extents)
-    scale_factor = 1.0 / max_dimension
-    mesh.apply_scale(scale_factor)
+        # Step 4: Scale
+        max_dimension = max(mesh.extents)
+        scale_factor = 1.0 / max_dimension
+        mesh.apply_scale(scale_factor)
 
-    # Step 5: Export and Descriptors
-    descriptors = ShapeDescriptors.from_mesh(mesh, model_class, model_name)  # assuming this is a predefined class
-    base_model_name, _ = os.path.splitext(model_name)
+        # Step 5: Export and Descriptors
+        descriptors = ShapeDescriptors.from_mesh(mesh, model_class, model_name)  # assuming this is a predefined class
+        base_model_name, _ = os.path.splitext(model_name)
 
-    normalized_output_path = os.path.join(normalized_models_path, model_class)
-    os.makedirs(normalized_output_path, exist_ok=True)
+        normalized_output_path = os.path.join(normalized_models_path, model_class)
+        os.makedirs(normalized_output_path, exist_ok=True)
 
-    # Construct the file path with the .obj extension explicitly added
-    mesh_path = os.path.join(normalized_output_path, f"{base_model_name}.obj")
-    mesh.export(mesh_path, file_type="obj")
+        # Construct the file path with the .obj extension explicitly added
+        mesh_path = os.path.join(normalized_output_path, f"{base_model_name}.obj")
+        mesh.export(mesh_path, file_type="obj")
 
-    return descriptors
+        return descriptors
+
+    return None
 
 
 def load_model(path):
@@ -167,7 +171,8 @@ def main():
         all_descriptors = list(
             tqdm(pool.imap_unordered(process_mesh, [(m, target_faces) for m in meshes]), total=len(meshes)))
     data_list = []
-
+    all_descriptors = [descriptor for descriptor in all_descriptors if descriptor]
+    exit()
     for descriptor in tqdm(all_descriptors, desc="Saving Descriptors for all Shapes", leave=False):
         data = {
             "Model Class": descriptor.model_class,
@@ -186,64 +191,16 @@ def main():
         }
         data_list.append(data)
 
-    # headers = ["Model Class",
-    #         "Model Name",
-    #         "Surface Area",
-    #         "Compactness",
-    #         "Rectangularity",
-    #         "Diameter",
-    #         "Convexity",
-    #         "Eccentricity",
-    #         "A3",
-    #         "D1",
-    #         "D2",
-    #         "D3",
-    #         "D4"]
-    #
-    # try:
-    #     with open(database_path, mode='w', newline='') as file:
-    #         writer = csv.writer(file, delimiter=';')
-    #         writer.writerow(headers)
-    #
-    #     # Append shape data to the CSV file
-    #     with open(database_path, mode='a', newline='') as file:
-    #         writer = csv.DictWriter(file, fieldnames=headers, delimiter=';')
-    #         for shape in data_list:
-    #             writer.writerow(shape)
-    # except FileNotFoundError:
-    #     try:
-    #         path = os.path.join('tools', 'outputs', 'database.csv')
-    #         with open(path, mode='w', newline='') as file:
-    #             writer = csv.writer(file, delimiter=';')
-    #             writer.writerow(headers)
-    #
-    #         # Append shape data to the CSV file
-    #         with open(path, mode='a', newline='') as file:
-    #             writer = csv.DictWriter(file, fieldnames=headers, delimiter=';')
-    #             for shape in data_list:
-    #                 writer.writerow(shape)
-    #     except FileNotFoundError:
-    #         path = os.path.join('outputs', 'database.csv')
-    #         with open(path, mode='w', newline='') as file:
-    #             writer = csv.writer(file, delimiter=';')
-    #             writer.writerow(headers)
-    #
-    #         # Append shape data to the CSV file
-    #         with open(path, mode='a', newline='') as file:
-    #             writer = csv.DictWriter(file, fieldnames=headers, delimiter=';')
-    #             for shape in data_list:
-    #                 writer.writerow(shape)
-
     df = pd.DataFrame(data_list)
 
     try:
         df.to_csv(database_path, index=False, sep=';')
     except OSError:
         try:
-            path = os.path.join('tools', 'outputs', 'database.csv')
+            path = os.path.join('tools', 'outputs', 'database2.csv')
             df.to_csv(path, index=False, sep=';')
         except OSError:
-            path = os.path.join('outputs', 'database.csv')
+            path = os.path.join('outputs', 'database2.csv')
             df.to_csv(path, index=False, sep=';')
 
 

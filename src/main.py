@@ -8,7 +8,6 @@ import imgui
 from moderngl_window.integrations.imgui import ModernglWindowRenderer
 from typing import Any, Tuple
 from moderngl_window.text.bitmapped import TextWriter2D
-import json
 
 
 class App(glw.WindowConfig):
@@ -31,21 +30,11 @@ class App(glw.WindowConfig):
         super().__init__(*args, **kwargs)  # type: ignore
         self.camera = glw.scene.camera.OrbitCamera(aspect_ratio=self.wnd.aspect_ratio)
         self.camera.zoom_sensitivity = 0.05
-        # self.camera.mouse_sensitivity = 0.75
-        # self.camera.zoom_state(5)
-        # self.camera.set_position(0.04484549, 0.79429578, 1.83496133)
 
         self.mouse_pressed = False
         self.mouse_button = 0
         self.mpos = (0, 0)
         self.mdelta = (0, 0)
-
-        try:
-            with open('config.json', 'r') as file:
-                self.config = json.load(file)
-        except FileNotFoundError:
-            with open('../config.json', 'r') as file:
-                self.config = json.load(file)
 
         # initialize all assets
         Shaders.instance(self)

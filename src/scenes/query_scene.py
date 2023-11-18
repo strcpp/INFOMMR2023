@@ -1,3 +1,4 @@
+from __future__ import annotations
 from render.model import Model
 from render.skybox import Skybox
 from scenes.scene import Scene
@@ -20,7 +21,11 @@ import matplotlib.pyplot as plt
 import mplcursors
 
 
-def normalize_single_features(mesh_features):
+def normalize_single_features(mesh_features: dict[str, ShapeDescriptors]) -> None:
+    """
+    Normalizes the single features of a shape.
+    :param mesh_features: Features of the shape.
+    """
     # Extract the feature descriptors from the dictionary values
     feature_values = [descriptor.get_single_features() for descriptor in mesh_features.values()]
 
@@ -39,7 +44,12 @@ def normalize_single_features(mesh_features):
         descriptor.normalize_single_features(standardized_feature)
 
 
-def load_model(path):
+def load_model(path: tuple[str, str, str]) -> tuple[trimesh.Trimesh, str, str]:
+    """
+    Load model from path.
+    :param path: Tuple containing the model's path, name and class.
+    :return: Tuple containing the model's mesh, name and class.
+    """
     mesh = trimesh.load_mesh(path[0])
     return mesh, path[1], path[2]
 
@@ -48,31 +58,35 @@ class QueryScene(Scene):
     """
     Implements the scene of the application.
     """
+    # Paths
+    original_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Default')
+    normalized_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Normalized')
+    # Use this instead of "normalized_model_path" to load the normalized models from the directory with less classes
+    less_class_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Normalized_Less_Classes')
+
+    # Rendering
+    light = None
+    skybox = None
+    lines = None
+    current_shading_mode = "flat"
+
+    # Models
     models = {}
     current_model = None
+    current_class = ""
     current_model_name = ""
     current_model_id = 0
     current_class_id = 0
-    current_class = ""
-    light = None
-    skybox = None
-    current_shading_mode = "flat"
-    show_wireframe = False
-    selected_class = 0
-    selected_model = 0
-    original_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Default')
-    normalized_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Normalized')
     average_model = None
-    lines = None
+    average_vertices = 0
+    average_faces = 0
+    average_model_class = ""
     model_bb = []
     model_basis = None
-    move_axes_to_barycenter = False
-    show_rest_of_ui = False
-    neighbor_count = 1
-    best_matching_shapes = []
-    show_bb = False
-    show_axis = False
     all_classes = []
+    poorly_sampled = []
+    refined = []
+
     all_model_names = {}
     all_meshes = {}
     all_descriptors = {}
@@ -80,22 +94,19 @@ class QueryScene(Scene):
     all_barycenter_lines = {}
     all_bounding_boxes = {}
     current_descriptor = None
-    index = None
-    average_vertices = 0
-    average_faces = 0
-    average_model_class = ""
-    distances = None
-    show_rest_of_ui_step_5 = False
-    show_rest_of_ui_step_6 = False
-    shapes_per_class = {}
+
+    # UI
+    show_wireframe = False
+    move_axes_to_barycenter = False
+    show_bb = False
+    show_axis = False
     evaluate = False
-    selected_evaluation_subject = 0
-    precisions, recalls, f1_scores = {}, {}, {}
-    poorly_sampled = []
-    refined = []
     show_poorly_sampled = False
-    selected_poorly_sampled = 0
     show_normalized = False
+    evaluate_cbsr = False
+    selected_class = 0
+    selected_model = 0
+    selected_poorly_sampled = 0
     selected_distance_id = 0
     selected_distance = "Euclidean"
     available_distances = ["Euclidean",
@@ -108,7 +119,15 @@ class QueryScene(Scene):
                            "EMD (Single) + Euclidean (Histogram)",
                            "EMD (Single) + Cosine (Histogram)",
                            ]
-    evaluate_cbsr = False
+
+    # Query
+    index = None
+    distances = None
+    neighbor_count = 1
+    best_matching_shapes = []
+    shapes_per_class = {}
+    selected_evaluation_subject = 0
+    precisions, recalls, f1_scores = {}, {}, {}
 
     def load(self) -> None:
         self.skybox = Skybox(self.app, skybox='clouds', ext='png')
@@ -165,7 +184,7 @@ class QueryScene(Scene):
         condition_high = (all_neighbors['Number of Vertices'] > 50000)
 
         # Use 5 shapes with less than 100 faces/vertices and 5 shapes with more than 50000 faces/vertices
-        poorly_sampled = pd.concat([all_neighbors[condition_low].head(1), all_neighbors[condition_high].head(1)])
+        poorly_sampled = pd.concat([all_neighbors[condition_low].head(4), all_neighbors[condition_high].head(4)])
 
         # Resampling poorly sampled outliers
         for _, outlier in tqdm(poorly_sampled.iterrows(), desc="Resampling outliers"):
@@ -247,21 +266,23 @@ class QueryScene(Scene):
         _, self.show_bb = imgui.checkbox("Show Bounding Boxes", self.show_bb)
         _, self.show_axis = imgui.checkbox("Show Axes", self.show_axis)
 
+        # Render 3D axes
         if self.show_axis:
             imgui.spacing()
             imgui.indent(16)
+            # Move 3D axes to the shape's barycenter
             _, self.move_axes_to_barycenter = imgui.checkbox("Move Axes to Barycenter",
                                                              self.move_axes_to_barycenter)
             imgui.unindent(16)
 
-        # Step 2
+        # Step 2 - Show outliers and their resampled counterparts
         imgui.unindent(16)
         imgui.spacing()
         imgui.separator()
         imgui.text("Step 2 - Outlier Resampling: ")
         imgui.spacing()
         _, self.show_poorly_sampled = imgui.checkbox("Show Poorly Sampled Shapes",
-                                                           self.show_poorly_sampled)
+                                                     self.show_poorly_sampled)
 
         if self.show_poorly_sampled:
             imgui.spacing()
@@ -316,7 +337,8 @@ class QueryScene(Scene):
                 self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
             # Add a combo box for models based on selected class
             if self.current_class and self.current_class in self.all_model_names:
-                models_of_current_class = self.all_model_names[self.current_class]
+                models_of_current_class = sorted(self.all_model_names[self.current_class])
+
                 clicked, self.current_model_id = imgui.combo("Models", self.current_model_id,
                                                              models_of_current_class)
                 if clicked:
@@ -383,6 +405,7 @@ class QueryScene(Scene):
         if self.current_model != '':
             imgui.set_next_window_position(420, 20, imgui.ONCE)
             if imgui.begin("Info", True):
+                # Show information about the selected poorly-sample shape (left) and its resampled counterpart (right)
                 if self.show_poorly_sampled:
                     imgui.columns(2, None, True)
                     imgui.set_column_width(-1, 250)
@@ -399,6 +422,7 @@ class QueryScene(Scene):
                     imgui.text(f"Number of Vertices: {len(mesh.vertices)}")
                     imgui.text(f"Number of Faces: {len(mesh.faces)}")
                     imgui.text("")
+                # Show information about the normalized shape (center) and its n best matching shapes
                 elif self.show_normalized:
                     imgui.columns(4, None, True)
                     aligned_shapes = [self.all_meshes[self.current_model_name].metadata['file_name']]
@@ -466,6 +490,7 @@ class QueryScene(Scene):
                     n_components=2, learning_rate='auto', init='random', perplexity=15, n_jobs=-1, random_state=42
                 ).fit_transform(np.array([mesh.get_normalized_features() for _, mesh in self.all_descriptors.items()]))
 
+                # Assign colors to classes
                 unique_classes = list(set(self.all_classes))
                 num_classes = len(unique_classes)
                 class_colors = plt.cm.rainbow(np.linspace(0, 1, num_classes))
@@ -484,16 +509,14 @@ class QueryScene(Scene):
                             continue
                         break
 
-                # Create a scatterplot and assign colors based on class labels
+                # Create scatterplot
                 plt.subplots(figsize=(16, 9))
-
                 plt.scatter(reduced_features[:, 0], reduced_features[:, 1], s=5, color=colormap)
-
                 plt.title('t-SNE Scatterplot')
-
                 plt.xlabel('First Feature')
                 plt.ylabel('Second Feature')
 
+                # Hover on points to see their shape class and name
                 cursor = mplcursors.cursor(hover=True)
                 cursor.connect("add", lambda sel: sel.annotation.set_text(
                     f"Class: {model_classes[sel.target.index]}\nName: {model_names[sel.target.index]}"))
@@ -580,8 +603,19 @@ class QueryScene(Scene):
 
         self.app.imgui.render(imgui.get_draw_data())
 
-    def render_shapes(self, color=[1, 1, 1, 1]) -> None:
-        def draw_shape(model, name, translation=0):
+    def render_shapes(self, color: list[int] = [1, 1, 1, 1]) -> None:
+        """
+        Renders one or more shapes.
+        :param color: Shape color.
+        """
+
+        def draw_shape(model: Model, name: str, translation: float = 0) -> None:
+            """
+            Renders a shape.
+            :param model: Model that will be rendered.
+            :param name: Model name.
+            :param translation: Tranlsation of the model that will be rendered.
+            """
             model.color = color
             model.draw(
                 self.app.camera.projection.matrix,
@@ -611,6 +645,7 @@ class QueryScene(Scene):
             draw_shape(self.current_model, self.current_model_name)
 
             if self.show_normalized:
+                # Render all the best-matching shapes that resulted from a query
                 translation = 2
                 for match in self.best_matching_shapes:
                     draw_shape(match[0], match[1], translation)
@@ -618,6 +653,7 @@ class QueryScene(Scene):
                     if translation > 0:
                         translation += 2
             elif self.show_poorly_sampled:
+                # Render refined shape next to its poorly-sampled counterpart
                 sample = self.refined[self.selected_poorly_sampled]
                 bb = sample[1]
                 x_coordinates = [point[0][0] for point in bb]

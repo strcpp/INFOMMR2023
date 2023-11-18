@@ -1,15 +1,13 @@
+from __future__ import annotations
 from abc import abstractmethod
 from render.model import Model
-
-from typing import Optional
 
 
 class Entity:
     """
     Represents an entity in the scene.
     """
-
-    def __init__(self, name: str, model: Model):
+    def __init__(self, name: str, model: Model) -> None:
         """
         Constructor.
         :param name: Entity name.
@@ -23,7 +21,6 @@ class Scene:
     """
     Represents a scene in the application.
     """
-
     def __init__(self, app) -> None:
         """
         Constructor.
@@ -58,7 +55,7 @@ class Scene:
 
         return unique_name
 
-    def find(self, name: str) -> Optional[Model]:
+    def find(self, name: str) -> Model | None:
         """
         Finds a model in the scene based on its name.
         :param name: Name of the model to find.
