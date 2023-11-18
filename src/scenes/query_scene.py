@@ -185,7 +185,7 @@ class QueryScene(Scene):
         condition_low = (all_neighbors['Number of Vertices'] < 100)
         condition_high = (all_neighbors['Number of Vertices'] > 50000)
 
-        # Use 5 shapes with less than 100 faces/vertices and 5 shapes with more than 50000 faces/vertices
+        # Use 4 shapes with less than 100 faces/vertices and 4 shapes with more than 50000 faces/vertices
         poorly_sampled = pd.concat([all_neighbors[condition_low].head(4), all_neighbors[condition_high].head(4)])
 
         # Resampling poorly sampled outliers

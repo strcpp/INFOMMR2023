@@ -5,8 +5,6 @@ from numba import njit
 from tools.descriptor_extraction import ShapeDescriptors
 from pynndescent import NNDescent
 from tqdm import tqdm
-from scipy.spatial.distance import cosine
-from scipy.stats import wasserstein_distance
 
 THRESHOLD = 500
 
@@ -123,6 +121,46 @@ def euclidean_distance(x1: np.ndarray, x2: np.ndarray) -> float:
     return np.sqrt(np.sum((x1 - x2) ** 2))
 
 
+@njit
+def cosine_distance(x1: np.ndarray, x2: np.ndarray) -> float:
+    """
+    Calculates the Cosine distance between 2 samples.
+    :param x1: 1st sample.
+    :param x2: 2nd sample.
+    :return: Cosine distance between the 2 samples.
+    """
+    dot_product = np.dot(x1, x2)
+    norm_x1 = np.linalg.norm(x1)
+    norm_x2 = np.linalg.norm(x2)
+
+    cosine_similarity = dot_product / (norm_x1 * norm_x2)
+
+    # Cosine distance is complementary to cosine similarity
+    cosine_distance = 1 - cosine_similarity
+
+    return cosine_distance
+
+
+@njit
+def earth_movers_distance(x1, x2):
+    """
+    Calculates the Earth Mover's Distance between 2 samples
+    (taken from: https://gist.github.com/jgraving/db2bf2fab8d623557e26eb363dd91af9/23e5df5b702f54e09984a04b83fa392edc6b8360)
+    :param x1: 1st sample.
+    :param x2: 2nd sample.
+    :return: Earth Mover's Distance between the 2 samples.
+    """
+    n = len(x1)
+    ac = 0
+    bc = 0
+    diff = 0
+    for i in range(n):
+        ac += x1[i]
+        bc += x2[i]
+        diff += abs(ac - bc)
+    return diff
+
+
 def get_best_matching_shapes(
         current_mesh, all_meshes, num_neighbors: int, distance_metric: str
 ) -> tuple[list[str], list[float]]:
@@ -145,12 +183,12 @@ def get_best_matching_shapes(
             current_features = np.array(current_mesh.get_weighted_normalized_features())
             mesh_features = np.array(mesh.get_weighted_normalized_features())
 
-            distances[model_name] = cosine(current_features, mesh_features)
+            distances[model_name] = cosine_distance(current_features, mesh_features)
         elif distance_metric == "EMD":
             current_features = np.array(current_mesh.get_weighted_normalized_features())
             mesh_features = np.array(mesh.get_weighted_normalized_features())
 
-            distances[model_name] = wasserstein_distance(current_features, mesh_features)
+            distances[model_name] = earth_movers_distance(current_features, mesh_features)
 
         elif distance_metric == "Euclidean (Single) + EMD (Histogram)":
             current_single_features = np.array(current_mesh.get_normalized_single_features())
@@ -160,9 +198,10 @@ def get_best_matching_shapes(
             mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
 
             single_distance = euclidean_distance(current_single_features, mesh_single_features)
-            histogram_distance = wasserstein_distance(current_histogram_features, mesh_histogram_features)
+            histogram_distance = earth_movers_distance(current_histogram_features, mesh_histogram_features)
 
-            distances[model_name] = single_distance * 0.04 + histogram_distance * 0.96
+            distances[model_name] = single_distance * 0.5 + histogram_distance * 0.5
+
         elif distance_metric == "Euclidean (Single) + Cosine (Histogram)":
             current_single_features = np.array(current_mesh.get_normalized_single_features())
             current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
@@ -171,7 +210,7 @@ def get_best_matching_shapes(
             mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
 
             single_distance = euclidean_distance(current_single_features, mesh_single_features)
-            histogram_distance = cosine(current_histogram_features, mesh_histogram_features)
+            histogram_distance = cosine_distance(current_histogram_features, mesh_histogram_features)
 
             distances[model_name] = single_distance * 0.04 + histogram_distance * 0.96
         elif distance_metric == "Cosine (Single) + EMD (Histogram)":
@@ -181,10 +220,10 @@ def get_best_matching_shapes(
             mesh_single_features = np.array(mesh.get_normalized_single_features())
             mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
 
-            single_distance = cosine(current_single_features, mesh_single_features)
-            histogram_distance = wasserstein_distance(current_histogram_features, mesh_histogram_features)
+            single_distance = cosine_distance(current_single_features, mesh_single_features)
+            histogram_distance = earth_movers_distance(current_histogram_features, mesh_histogram_features)
 
-            distances[model_name] = single_distance * 0.2 + histogram_distance * 0.8
+            distances[model_name] = single_distance * 0.5 + histogram_distance * 0.5
         elif distance_metric == "Cosine (Single) + Euclidean (Histogram)":
             current_single_features = np.array(current_mesh.get_normalized_single_features())
             current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
@@ -192,7 +231,7 @@ def get_best_matching_shapes(
             mesh_single_features = np.array(mesh.get_normalized_single_features())
             mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
 
-            single_distance = cosine(current_single_features, mesh_single_features)
+            single_distance = cosine_distance(current_single_features, mesh_single_features)
             histogram_distance = euclidean_distance(current_histogram_features, mesh_histogram_features)
 
             distances[model_name] = single_distance * 0.4 + histogram_distance * 0.6
@@ -203,10 +242,10 @@ def get_best_matching_shapes(
             mesh_single_features = np.array(mesh.get_normalized_single_features())
             mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
 
-            single_distance = wasserstein_distance(current_single_features, mesh_single_features)
+            single_distance = earth_movers_distance(current_single_features, mesh_single_features)
             histogram_distance = euclidean_distance(current_histogram_features, mesh_histogram_features)
 
-            distances[model_name] = single_distance * 0.3 + histogram_distance * 0.7
+            distances[model_name] = single_distance * 0.03 + histogram_distance * 0.97
         elif distance_metric == "EMD (Single) + Cosine (Histogram)":
             current_single_features = np.array(current_mesh.get_normalized_single_features())
             current_histogram_features = np.array(current_mesh.get_normalized_histogram_features())
@@ -214,10 +253,10 @@ def get_best_matching_shapes(
             mesh_single_features = np.array(mesh.get_normalized_single_features())
             mesh_histogram_features = np.array(mesh.get_normalized_histogram_features())
 
-            single_distance = wasserstein_distance(current_single_features, mesh_single_features)
-            histogram_distance = cosine(current_histogram_features, mesh_histogram_features)
+            single_distance = earth_movers_distance(current_single_features, mesh_single_features)
+            histogram_distance = cosine_distance(current_histogram_features, mesh_histogram_features)
 
-            distances[model_name] = single_distance * 0.3 + histogram_distance * 0.7
+            distances[model_name] = single_distance * 0.01 + histogram_distance * 0.99
 
     sorted_distances = sorted(distances.items(), key=lambda item: item[1])
     best_matching_shapes = [model_name for model_name, _ in sorted_distances[:num_neighbors]]

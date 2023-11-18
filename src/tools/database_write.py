@@ -116,7 +116,6 @@ def normalize_mesh(args):
     mesh = m[0]
 
     # Step 1: Resample
-    # Assuming 'resample' is a function defined elsewhere that you've imported
     mesh.process()
     mesh.remove_duplicate_faces()
     mesh = resample(mesh, target_faces)

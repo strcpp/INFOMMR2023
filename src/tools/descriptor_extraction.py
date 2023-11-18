@@ -11,7 +11,7 @@ output_dir2 = "src/tools/outputs/histograms/descriptors"
 
 np.random.seed(42)
 
-SAMPLE_SIZE = 1000
+SAMPLE_SIZE = 100
 BIN_SIZE = 10
 
 
