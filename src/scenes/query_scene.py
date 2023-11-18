@@ -61,7 +61,7 @@ class QueryScene(Scene):
     # Paths
     original_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Default')
     normalized_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Normalized')
-    # Use this instead of "normalized_model_path" to load the normalized models from the directory with less classes
+    # Use this instead of "normalized_model_path" to load the normalized models from the directory with fewer classes
     less_class_model_path = os.path.join(os.path.dirname(__file__), '../../resources/models/Normalized_Less_Classes')
 
     # Rendering
@@ -86,6 +86,7 @@ class QueryScene(Scene):
     all_classes = []
     poorly_sampled = []
     refined = []
+    models_of_current_class = None
 
     all_model_names = {}
     all_meshes = {}
@@ -103,6 +104,7 @@ class QueryScene(Scene):
     evaluate = False
     show_poorly_sampled = False
     show_normalized = False
+    selected_normalized = False
     evaluate_cbsr = False
     selected_class = 0
     selected_model = 0
@@ -223,7 +225,7 @@ class QueryScene(Scene):
 
         # Setting up ANN query
         print("< Setting up ANN Query...")
-        query_shapes = np.array([descriptor.get_normalized_features() for descriptor in self.all_descriptors.values()])
+        query_shapes = np.array([descriptor.get_weighted_normalized_features() for descriptor in self.all_descriptors.values()])
 
         # Setting all NaN features to 0
         query_shapes = np.nan_to_num(query_shapes, nan=0)
@@ -307,6 +309,8 @@ class QueryScene(Scene):
             self.all_basis_lines[self.current_model_name] = get_basis_lines(mesh.bounds, None)
             self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
 
+            self.selected_normalized = False
+
         # Step 3
         imgui.spacing()
         imgui.separator()
@@ -322,6 +326,21 @@ class QueryScene(Scene):
             imgui.indent(16)
             self.show_poorly_sampled = False
             self.evaluate_cbsr = False
+
+            # By default, show 1st shape of 1st class
+            if not self.selected_normalized:
+                self.current_class_id = 0
+                self.current_class = self.all_classes[self.current_class_id]
+                self.current_model_name = self.all_model_names[self.current_class][0]
+                mesh = self.all_meshes[self.current_model_name]
+                self.current_model = Model(self.app, self.current_model_name, mesh)
+                self.current_descriptor = self.all_descriptors[self.current_model_name]
+                self.all_bounding_boxes[self.current_model_name] = get_bb_lines(
+                    self.all_meshes[self.current_model_name].bounds)
+                self.all_basis_lines[self.current_model_name] = get_basis_lines(
+                    self.all_meshes[self.current_model_name].bounds, None)
+                self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
+
             # Add a combo box for classes
             clicked, self.current_class_id = imgui.combo("Classes", self.current_class_id, self.all_classes)
             if clicked:
@@ -335,14 +354,19 @@ class QueryScene(Scene):
                 self.all_basis_lines[self.current_model_name] = get_basis_lines(
                     self.all_meshes[self.current_model_name].bounds, None)
                 self.all_barycenter_lines[self.current_model_name] = get_basis_lines(None, mesh.centroid)
+
+                self.models_of_current_class = sorted(self.all_model_names[self.current_class])
+                self.current_model_id = 0
+                self.selected_normalized = True
+
             # Add a combo box for models based on selected class
             if self.current_class and self.current_class in self.all_model_names:
-                models_of_current_class = sorted(self.all_model_names[self.current_class])
+                self.models_of_current_class = sorted(self.all_model_names[self.current_class])
 
                 clicked, self.current_model_id = imgui.combo("Models", self.current_model_id,
-                                                             models_of_current_class)
+                                                             self.models_of_current_class)
                 if clicked:
-                    self.current_model_name = models_of_current_class[self.current_model_id]
+                    self.current_model_name = self.models_of_current_class[self.current_model_id]
                     mesh = self.all_meshes[self.current_model_name]
                     self.current_model = Model(self.app, self.current_model_name, mesh)
                     self.current_descriptor = self.all_descriptors[self.current_model_name]
@@ -389,7 +413,7 @@ class QueryScene(Scene):
 
             if imgui.button("Get Best-Matching Shapes (ANN)"):
                 neighbor_indexes, distances = self.index.query(
-                    np.array([self.all_descriptors[self.current_model_name].get_normalized_features()]),
+                    np.array([self.all_descriptors[self.current_model_name].get_weighted_normalized_features()]),
                     k=self.neighbor_count + 1
                 )
 
@@ -402,26 +426,29 @@ class QueryScene(Scene):
                     self.all_basis_lines[name] = get_basis_lines(self.all_meshes[name].bounds, None)
                     self.all_barycenter_lines[name] = get_basis_lines(None, self.all_meshes[name].centroid)
             imgui.unindent(16)
+
         if self.current_model != '':
             imgui.set_next_window_position(420, 20, imgui.ONCE)
             if imgui.begin("Info", True):
                 # Show information about the selected poorly-sample shape (left) and its resampled counterpart (right)
                 if self.show_poorly_sampled:
                     imgui.columns(2, None, True)
-                    imgui.set_column_width(-1, 250)
-                    sample = self.poorly_sampled[self.selected_poorly_sampled]
-                    imgui.text(f"Shape Class: {sample[5]}")
-                    imgui.text(f"Number of Vertices: {len(sample[0].mesh.vertices)}")
-                    imgui.text(f"Number of Faces: {len(sample[0].mesh.faces)}")
-                    imgui.text("")
-                    imgui.next_column()
+                    # Resampled shape info
                     imgui.set_column_width(-1, 250)
                     sample = self.refined[self.selected_poorly_sampled]
                     imgui.text(f"Shape Class: {sample[5]}")
                     mesh = sample[0].mesh
                     imgui.text(f"Number of Vertices: {len(mesh.vertices)}")
                     imgui.text(f"Number of Faces: {len(mesh.faces)}")
+                    imgui.next_column()
+                    # Poorly-sampled shape info
+                    imgui.set_column_width(-1, 250)
+                    sample = self.poorly_sampled[self.selected_poorly_sampled]
+                    imgui.text(f"Shape Class: {sample[5]}")
+                    imgui.text(f"Number of Vertices: {len(sample[0].mesh.vertices)}")
+                    imgui.text(f"Number of Faces: {len(sample[0].mesh.faces)}")
                     imgui.text("")
+
                 # Show information about the normalized shape (center) and its n best matching shapes
                 elif self.show_normalized:
                     imgui.columns(4, None, True)
@@ -430,13 +457,13 @@ class QueryScene(Scene):
                     for i in range(0, len(self.best_matching_shapes), 2):
                         try:
                             shape2 = self.best_matching_shapes[i + 1][1]
-                            aligned_shapes.insert(0, shape2)
-                            aligned_distances.insert(0, self.distances[i + 1])
+                            aligned_shapes.insert(len(aligned_shapes), shape2)
+                            aligned_distances.insert(len(aligned_shapes), self.distances[i + 1])
                         except IndexError:
                             pass
                         shape1 = self.best_matching_shapes[i][1]
-                        aligned_shapes.insert(len(aligned_shapes), shape1)
-                        aligned_distances.insert(len(aligned_shapes), self.distances[i])
+                        aligned_shapes.insert(0, shape1)
+                        aligned_distances.insert(0, self.distances[i])
 
                     for i, shape in enumerate(aligned_shapes):
                         imgui.set_column_width(-1, 280)
@@ -488,7 +515,7 @@ class QueryScene(Scene):
 
                 reduced_features = TSNE(
                     n_components=2, learning_rate='auto', init='random', perplexity=15, n_jobs=-1, random_state=42
-                ).fit_transform(np.array([mesh.get_normalized_features() for _, mesh in self.all_descriptors.items()]))
+                ).fit_transform(np.array([mesh.get_weighted_normalized_features() for _, mesh in self.all_descriptors.items()]))
 
                 # Assign colors to classes
                 unique_classes = list(set(self.all_classes))

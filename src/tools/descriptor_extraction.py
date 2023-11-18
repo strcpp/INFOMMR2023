@@ -73,7 +73,6 @@ class ShapeDescriptors:
 
     @classmethod
     def from_csv_row(cls, row, mesh):
-
         model_class = row['Model Class'].item()
 
         model_name = row['Model Name'].item()
@@ -110,6 +109,9 @@ class ShapeDescriptors:
 
     @classmethod
     def from_mesh(cls, mesh, model_class, model_name):
+        """
+        2nd Constructor.
+        """
         model_name, _ = os.path.splitext(model_name)
         surface_area = mesh.area
 
@@ -143,18 +145,33 @@ class ShapeDescriptors:
             D4=D4
         )
 
-    def compute_compactness(mesh, volume):
+    def compute_compactness(mesh, volume: float) -> float:
+        """
+        Calculate mesh compactness.
+        :param volume: Mesh volume.
+        :return: Mesh compactness.
+        """
         V = volume
         A = mesh.area
         return (A ** 3) / (V ** 2)
 
-    def compute_rectangularity(mesh, volume):
+    def compute_rectangularity(mesh, volume: float) -> float:
+        """
+        Calculates the mesh rectangularity.
+        :param volume: Mesh volume.
+        :return: Mesh rectangulariy.
+        """
         obb_volume = mesh.bounding_box_oriented.volume
         return volume / obb_volume
 
     @staticmethod
     @njit
-    def compute_diameter(vertices):
+    def compute_diameter(vertices: np.ndarray) -> float:
+        """
+        Calculates the mesh diameter.
+        :param vertices: Mesh vertices.
+        :return: Mesh diameter.
+        """
         diameter = 0
         for i in range(len(vertices)):
             for j in range(i + 1, len(vertices)):
@@ -162,15 +179,29 @@ class ShapeDescriptors:
                 diameter = max(diameter, dist)
         return diameter
 
-    def compute_convexity(mesh, volume):
+    def compute_convexity(mesh, volume: float) -> float:
+        """
+        Calculates the mesh convexity.
+        :param volume: Mesh volume.
+        :return: Mesh convexity.
+        """
         return volume / mesh.convex_hull.volume
 
-    def compute_eccentricity(mesh):
+    def compute_eccentricity(mesh) -> float:
+        """
+        Calculates the mesh eccentricity.
+        :return: Mesh eccentricity.
+        """
         covariance_matrix = np.cov(np.transpose(mesh.vertices))
         eigenvalues = np.linalg.eigvals(covariance_matrix)
         return max(eigenvalues) / min(eigenvalues)
 
-    def compute_A3(mesh, num_samples):
+    def compute_A3(mesh, num_samples: int) -> float:
+        """
+        Calculates the A3 descriptor.
+        :param num_samples: Number of random samples to use.
+        :return: A3 descriptor.
+        """
         angles = []
         vertices = mesh.vertices
         for _ in range(num_samples):
@@ -185,7 +216,10 @@ class ShapeDescriptors:
         a3 = [x / np.sum(histogram) for x in histogram]
         return a3
 
-    def save_A3_histogram_image(self):
+    def save_A3_histogram_image(self) -> None:
+        """
+        Saves the histogram of the A3 descriptor.
+        """
         histogram = self.A3
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -210,7 +244,12 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def compute_D1(mesh, num_samples):
+    def compute_D1(mesh, num_samples: int) -> float:
+        """
+        Calculates the D1 descriptor.
+        :param num_samples: Number of random samples to use.
+        :return: D1 descriptor.
+        """
         barycenter = mesh.centroid
 
         distances = []
@@ -225,7 +264,10 @@ class ShapeDescriptors:
         d1 = [x / np.sum(histogram) for x in histogram]
         return d1
 
-    def save_D1_histogram_image(self):
+    def save_D1_histogram_image(self) -> None:
+        """
+        Saves the histogram of the D1 descriptor.
+        """
         histogram = self.D1
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -248,7 +290,12 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def compute_D2(mesh, num_samples):
+    def compute_D2(mesh, num_samples: int) -> float:
+        """
+        Calculates the D2 descriptor.
+        :param num_samples: Number of random samples to use.
+        :return: D2 descriptor.
+        """
         distances = []
         vertices = mesh.vertices
         for _ in range(num_samples):
@@ -262,7 +309,10 @@ class ShapeDescriptors:
         d2 = [x / np.sum(histogram) for x in histogram]
         return d2
 
-    def save_D2_histogram_image(self):
+    def save_D2_histogram_image(self) -> None:
+        """
+        Saves the histogram of the D2 descriptor.
+        """
         histogram = self.D2
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -285,7 +335,12 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def compute_D3(mesh, num_samples):
+    def compute_D3(mesh, num_samples: int) -> float:
+        """
+        Calculates the D3 descriptor.
+        :param num_samples: Number of random samples to use.
+        :return: D3 descriptor.
+        """
         areas = []
         vertices = mesh.vertices
         for _ in range(num_samples):
@@ -310,7 +365,10 @@ class ShapeDescriptors:
         d3 = [x / np.sum(histogram) for x in histogram]
         return d3
 
-    def save_D3_histogram_image(self):
+    def save_D3_histogram_image(self) -> None:
+        """
+        Saves the histogram of the D3 descriptor.
+        """
         histogram = self.D3
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -333,7 +391,12 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def compute_D4(mesh, num_samples):
+    def compute_D4(mesh, num_samples: int) -> float:
+        """
+        Calculates the D4 descriptor.
+        :param num_samples: Number of random samples to use.
+        :return: D4 descriptor.
+        """
         volumes = []
         vertices = mesh.vertices
         for _ in range(num_samples):
@@ -351,7 +414,10 @@ class ShapeDescriptors:
         d4 = [x / np.sum(histogram) for x in histogram]
         return d4
 
-    def save_D4_histogram_image(self):
+    def save_D4_histogram_image(self) -> None:
+        """
+        Saves the histogram of the D4 descriptor.
+        """
         histogram = self.D4
 
         fig, ax = plt.subplots(figsize=(10, 6))
@@ -374,7 +440,11 @@ class ShapeDescriptors:
         plt.savefig(output_path, format="png")
         plt.close(fig)
 
-    def get_single_features(self):
+    def get_single_features(self) -> list[float]:
+        """
+        Returns the non-normalized single features.
+        :return: Non-normalized single features.
+        """
         return [self.surface_area,
                 self.compactness,
                 self.rectangularity,
@@ -382,8 +452,11 @@ class ShapeDescriptors:
                 self.convexity,
                 self.eccentricity]
 
-    def get_normalized_features(self):
-
+    def get_weighted_normalized_features(self) -> list[float]:
+        """
+        Returns the weighted normalized single and histogram features.
+        :return: Weighted normalized single and histogram features.
+        """
         return_list = [self.surface_area_normalized * 0.015,
                        self.compactness_normalized * 0.015,
                        self.rectangularity_normalized * 0.015,
@@ -400,7 +473,11 @@ class ShapeDescriptors:
 
         return return_list
 
-    def get_normalized_single_features(self):
+    def get_normalized_single_features(self) -> list[float]:
+        """
+        Returns the normalized single features.
+        :return: Normalized single features.
+        """
         return [self.surface_area_normalized,
                 self.compactness_normalized,
                 self.rectangularity_normalized,
@@ -409,7 +486,11 @@ class ShapeDescriptors:
                 self.eccentricity_normalized,
                 ]
 
-    def get_normalized_histogram_features(self):
+    def get_normalized_histogram_features(self) -> list[float]:
+        """
+        Returns the normalized histogram features.
+        :return: Normalized histogram features.
+        """
         return_list = []
 
         return_list.extend([x for x in self.A3])
@@ -420,7 +501,11 @@ class ShapeDescriptors:
 
         return return_list
 
-    def normalize_single_features(self, updated_features):
+    def normalize_single_features(self, updated_features: np.ndarray) -> None:
+        """
+        Normalizes the shape's single features.
+        :param updated_features: Normalized single features.
+        """
         self.surface_area_normalized = updated_features[0]
         self.compactness_normalized = updated_features[1]
         self.rectangularity_normalized = updated_features[2]

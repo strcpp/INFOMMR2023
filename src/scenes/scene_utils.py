@@ -137,18 +137,18 @@ def get_best_matching_shapes(
     distances = {}
     for model_name, mesh in all_meshes.items():
         if distance_metric == "Euclidean":
-            current_features = np.array(current_mesh.get_normalized_features())
-            mesh_features = np.array(mesh.get_normalized_features())
+            current_features = np.array(current_mesh.get_weighted_normalized_features())
+            mesh_features = np.array(mesh.get_weighted_normalized_features())
 
             distances[model_name] = euclidean_distance(current_features, mesh_features)
         elif distance_metric == "Cosine":
-            current_features = np.array(current_mesh.get_normalized_features())
-            mesh_features = np.array(mesh.get_normalized_features())
+            current_features = np.array(current_mesh.get_weighted_normalized_features())
+            mesh_features = np.array(mesh.get_weighted_normalized_features())
 
             distances[model_name] = cosine(current_features, mesh_features)
         elif distance_metric == "EMD":
-            current_features = np.array(current_mesh.get_normalized_features())
-            mesh_features = np.array(mesh.get_normalized_features())
+            current_features = np.array(current_mesh.get_weighted_normalized_features())
+            mesh_features = np.array(mesh.get_weighted_normalized_features())
 
             distances[model_name] = wasserstein_distance(current_features, mesh_features)
 
@@ -320,7 +320,7 @@ def evaluate_query(
                 descriptor, {key: value for key, value in all_shapes.items() if key != name}, k, distance_metric
             )
         elif query_type == "ANN":
-            neighbor_indexes, _ = index.query(np.array([descriptor.get_normalized_features()]), k=k + 1)
+            neighbor_indexes, _ = index.query(np.array([descriptor.get_weighted_normalized_features()]), k=k + 1)
             matching_names = [list(all_shapes.keys())[k] for k in neighbor_indexes.flatten().tolist()[1:]]
         else:
             print(f"No implementation for the query type: {query_type}")
