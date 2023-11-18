@@ -5,11 +5,10 @@ import csv
 import trimesh
 
 
-def save_data(meshes: dict | None, resample: bool = True) -> None:
+def save_data(meshes: dict | None) -> None:
     """
     Saves shape database data to CSV.
     :param meshes: Database meshes. Used to save the resampled shapes.
-    :param resample: If True, saves the resampled meshes during runtime. If False, saves the original data.
     """
     base = os.path.dirname(__file__)
     models_path = os.path.join(base, '../../resources/models')
@@ -74,10 +73,7 @@ def save_data(meshes: dict | None, resample: bool = True) -> None:
                                            '3D Bounding Box': bounding_box})
 
     # Path to the CSV file
-    if resample:
-        csv_file_path = os.path.join('outputs', 'shape_data_resampled.csv')
-    else:
-        csv_file_path = os.path.join('outputs', 'shape_data.csv')
+    csv_file_path = os.path.join('outputs', 'shape_data.csv')
 
     # CSV file headers
     headers = ['Shape Name', 'Shape Class', 'Number of Vertices', 'Number of Faces', 'Type of Faces', '3D Bounding Box']
@@ -96,4 +92,4 @@ def save_data(meshes: dict | None, resample: bool = True) -> None:
 
 
 if __name__ == '__main__':
-    save_data(None, False)
+    save_data(None)

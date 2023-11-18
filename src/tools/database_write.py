@@ -56,6 +56,13 @@ def align_to_largest_extent_component(mesh: Trimesh) -> Trimesh:
 
 
 def align_mesh_axes(eig_vectors: np.ndarray, eig_values: np.ndarray, vertices: np.ndarray) -> np.ndarray:
+    """
+    Calculates aligned mesh eigenvectors based on the eigenvalues and the extents of the mesh vertices.
+    :param eig_vectors: Mesh eigenvectors.
+    :param eig_values: Mesh eigenvalues.
+    :param vertices: Mesh vertices.
+    :return: Aligned eigenvectors.
+    """
     # Sort eigenvalues and eigenvectors by the magnitude of the eigenvalues (major to minor)
     sort_idx = np.argsort(-eig_values)
     eig_vectors = eig_vectors[:, sort_idx]
@@ -81,7 +88,13 @@ def align_mesh_axes(eig_vectors: np.ndarray, eig_values: np.ndarray, vertices: n
     return aligned_eig_vectors
 
 
-def align_mesh(mesh, eig_vectors):
+def align_mesh(mesh: Trimesh, eig_vectors: np.ndarray) -> Trimesh:
+    """
+    Aligns a mesh based on given eigenvectors.
+    :param mesh: Mesh.
+    :param eig_vectors: Eigenvectors.
+    :return: Aligned mesh.
+    """
     # Apply the rotation to align the mesh with the new axes
     mesh.vertices = mesh.vertices @ eig_vectors
 
@@ -93,7 +106,10 @@ def align_mesh(mesh, eig_vectors):
     return mesh
 
 
-def process_mesh(args):
+def normalize_mesh(args):
+    """
+    Processes a mesh based on the 5-step normalization process.
+    """
     m, target_faces = args
     model_class = m[1]
     model_name = m[2]
@@ -139,12 +155,20 @@ def process_mesh(args):
     return None
 
 
-def load_model(path):
+def load_model(path: tuple[str, str, str]) -> tuple[trimesh.Trimesh, str, str]:
+    """
+    Load model from path.
+    :param path: Tuple containing the model's path, name and class.
+    :return: Tuple containing the model's mesh, name and class.
+    """
     mesh = trimesh.load_mesh(path[0])
     return mesh, path[1], path[2]
 
 
 def main():
+    """
+    Main
+    """
     # Store all paths to be processed
     paths_to_load = []
 
@@ -169,10 +193,12 @@ def main():
     # Use multiprocessing to parallelize the processing
     with Pool(processes=cpu_count()) as pool:
         all_descriptors = list(
-            tqdm(pool.imap_unordered(process_mesh, [(m, target_faces) for m in meshes]), total=len(meshes)))
+            tqdm(pool.imap_unordered(normalize_mesh, [(m, target_faces) for m in meshes]), total=len(meshes)))
     data_list = []
+
+    # Remove all None elements
     all_descriptors = [descriptor for descriptor in all_descriptors if descriptor]
-    exit()
+
     for descriptor in tqdm(all_descriptors, desc="Saving Descriptors for all Shapes", leave=False):
         data = {
             "Model Class": descriptor.model_class,
