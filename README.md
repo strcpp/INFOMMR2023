@@ -40,13 +40,13 @@ Click on the 'Show Wireframe' checkbox to render the shape in Wireframe mode.
 
 Click on the 'Show Bounding Box' checkbox to render the bounding boxes for all rendered shapes.
 
-Click on the 'Show Axes' checbkox to render the 3D axes on the world origin.
+Click on the 'Show Axes' checkbox to render the 3D axes on the world origin.
 A 'Move Axes to Barycenter' option will then appear. Clicking on that checkbox will move the 3D axes to the shape barycenter instead.
 ```
 
 ### Visualize Poorly-Sampled Shape Examples
 ```sh
-Clicking on the 'Show Poorly Sample Shapes' checkbox will show a porrly-sampled shape (right) example next to its resampled shape counterpart (left).
+Clicking on the 'Show Poorly Sample Shapes' checkbox will show a poorly-sampled shape (right) example next to its resampled shape counterpart (left).
 ```
 
 ### Visualize Normalized Shapes
@@ -62,11 +62,11 @@ Clicking on the 2nd one ('Models') allows the user to select which shape to rend
 ```sh
 If the 'Show Normalized Shapes' checkbox is selected, the 'Query' menu will appear.
 
-The user can select how many best-matching shapes ('n') to return. Be default, 1 shape is returned.
+The user can select how many best-matching shapes ('n') to return. By default, 1 shape is returned.
 
 The user can also select what distance metric to use in the 'Custom' query, by clicking on the 'Select Distance Metric (Custom)' dropdown menu.
 
-Clicking on the 'Get Best-Matching Shapes (Customs)' uses the 'Custom' query method with the selected distance metric.
+Clicking on the 'Get Best-Matching Shapes (Custom)' uses the 'Custom' query method with the selected distance metric.
 Clicking on the 'Get Best-Matching Shapes (ANN)' uses the prepared 'ANN' query method with the 'braycurtis' distance.
 
 The query shape always appears in the middle.
@@ -122,9 +122,9 @@ This will generate the 'database.CSV' already located inside 'src/tools/outputs'
 By changing the 'SAMPLE_SIZE' and 'BIN_SIZE' values in Lines 14 and 15 of 'src/tools/descriptor_extraction.py' you can generate different databases.
 ```
 
-### Generate Shape-Propery Distribution Plots
+### Generate Shape-Property Distribution Plots
 ```sh
-To generate the shape-property edistribution plots, run 'src/tools/generate_descriptor_plots.py'
+To generate the shape-property distribution plots, run 'src/tools/generate_descriptor_plots.py'
 
 This will generate the plots already located inside 'src/tools/outputs/descriptors'.
 
