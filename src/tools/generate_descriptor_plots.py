@@ -91,7 +91,7 @@ def main(show_plot=False):
             current_descriptor = d3
         else:
             current_descriptor = d4
-        classes = ["Sign", "Wheel"]
+        classes = ["AircraftBuoyant", "Hat", "Sign", "Wheel"]
         for c in classes:
             plt.figure()
             # Plot histograms and curves
