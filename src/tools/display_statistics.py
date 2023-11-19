@@ -56,17 +56,17 @@ def histogram(df: DataFrame, column_name: str, class_name: str | None, show: boo
             path = f"outputs/histograms/vertices/{class_name}"
             if not os.path.exists(path):
                 os.makedirs(path)
-            plt.savefig(f"outputs/histograms/vertices/{class_name}/vertices_{class_name}_normalized")
+            plt.savefig(f"outputs/histograms/vertices/{class_name}/vertices_{class_name}")
         else:
-            plt.savefig(f"outputs/histograms/vertices/All/all_shapes_normalized")
+            plt.savefig(f"outputs/histograms/vertices/All/all_shapes")
     else:
         if class_name:
             path = f"outputs/histograms/faces/{class_name}"
             if not os.path.exists(path):
                 os.makedirs(path)
-            plt.savefig(f"outputs/histograms/faces/{class_name}/faces_{class_name}_normalized")
+            plt.savefig(f"outputs/histograms/faces/{class_name}/faces_{class_name}")
         else:
-            plt.savefig(f"outputs/histograms/faces/All/all_shapes_normalized")
+            plt.savefig(f"outputs/histograms/faces/All/all_shapes")
 
     if show:
         plt.show()
