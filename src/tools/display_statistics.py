@@ -217,7 +217,11 @@ def return_shape_descriptors(
     except FileNotFoundError:
         # If not found, try to read it from the alternative path
         new_path = os.path.join('tools', 'outputs', 'database.csv')
-        df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+        try:
+            df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
+        except FileNotFoundError:
+            new_path = os.path.join('outputs', 'database.csv')
+            df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
     # Create a dictionary to hold the ShapeDescriptors, with model names as keys
     descriptors_map = {}
