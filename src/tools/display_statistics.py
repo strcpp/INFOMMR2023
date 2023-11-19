@@ -118,10 +118,10 @@ def save_histograms(show_histogram: bool = False) -> None:
         df = pd.read_csv(csv_file_path, delimiter=';')
     except FileNotFoundError:
         try:
-            new_path = os.path.join('tools', 'outputs', 'shape_data_normalized.csv')
+            new_path = os.path.join('tools', 'outputs', 'shape_data.csv')
             df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
         except FileNotFoundError:
-            new_path = os.path.join('outputs', 'shape_data_normalized.csv')
+            new_path = os.path.join('outputs', 'shape_data.csv')
             df = pd.read_csv(os.path.join(os.getcwd(), new_path), delimiter=';')
 
     # Display histogram for the number of vertices
