@@ -121,3 +121,12 @@ This will generate the 'database.CSV' already located inside 'src/tools/outputs'
 
 By changing the 'SAMPLE_SIZE' and 'BIN_SIZE' values in Lines 14 and 15 of 'src/tools/descriptor_extraction.py' you can generate different databases.
 ```
+
+### Generate Shape-Propery Distribution Plots
+```sh
+To generate the shape-property edistribution plots, run 'src/tools/generate_descriptor_plots.py'
+
+This will generate the plots already located inside 'src/tools/outputs/descriptors'.
+
+By changing the classes in Line 94 of 'src/tools/generate_descriptor_plots.py' you can generate pltos for different classes.
+```
