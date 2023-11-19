@@ -2,6 +2,11 @@
 Multimedia retreival assignment instructions
 ## Installation
 
+### Python Version
+```sh
+Python 3.10 is recommended.
+```
+
 ### Linux/MacOS
 ```sh
 pip install -r requirements.txt
@@ -90,7 +95,7 @@ Clicking on the 'Evaluate CBSR System' checkbox allows the user to evaluate both
 
 The user can once again select the number of best-matching shapes that will be returned, as well as the distance metric that will be used for the 'Custom' query.
 
-Clicking on the 'Evaluate Custom Query' will evaluate the 'Custom' query. This can take up to 10 minutes depending on the selected distance metric.
+Clicking on the 'Evaluate Custom Query' will evaluate the 'Custom' query. This can take 2-3 minutes depending on the selected distance metric.
 Clicking on the 'Evaluate ANN Query' will evaluate the 'ANN' query. This will take a couple of seconds.
 
 A new window which, by default, shows the average query precision, recall and f1-score will appear.
