@@ -465,11 +465,11 @@ class ShapeDescriptors:
                        self.eccentricity_normalized * 0.015,
                        ]
 
-        return_list.extend([x * 0.182 for x in self.A3])
-        return_list.extend([x * 0.182 for x in self.D1])
-        return_list.extend([x * 0.182 for x in self.D2])
-        return_list.extend([x * 0.182 for x in self.D3])
-        return_list.extend([x * 0.182 for x in self.D4])
+        return_list.extend([x * 0.225 for x in self.A3])
+        return_list.extend([x * 0.12 for x in self.D1])
+        return_list.extend([x * 0.18 for x in self.D2])
+        return_list.extend([x * 0.185 for x in self.D3])
+        return_list.extend([x * 0.2 for x in self.D4])
 
         return return_list
 
